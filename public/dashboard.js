@@ -1356,15 +1356,19 @@ window.renderCollectorsTab = function() {
     html += '<div class="stat-card"><div class="val">' + d.reviewCollectorSummary.length + '</div><div class="lbl">Collectors Reviewed</div></div>';
     html += '</div>';
 
-    // View 1: Collector Parts Overview
-    html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:24px 0 12px;">Collector Parts Overview (Before Data)</h2>';
+    // Two tables side by side
+    html += '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">';
+
+    // ── LEFT: Collector Parts Overview ──
+    html += '<div style="flex:1;min-width:420px;">';
+    html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:0 0 8px;">Collector Parts Overview (Before Data)</h2>';
     html += '<button class="export-btn" onclick="exportTableCsv(\'collectors-overview-table\',\'collectors-overview\')">&#x2913; Export CSV</button>';
     html += '<div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">';
-    html += '<div style="max-height:450px;overflow-y:auto;">';
-    html += '<table class="stats-table auto-w" id="collectors-overview-table" style="border:none;border-radius:0;box-shadow:none;">';
+    html += '<div style="max-height:500px;overflow-y:auto;">';
+    html += '<table class="stats-table" id="collectors-overview-table" style="border:none;border-radius:0;box-shadow:none;">';
     html += '<thead style="position:sticky;top:0;z-index:1;"><tr>';
     html += '<th>HR Code</th><th>Name</th><th>Total Parts</th>';
-    html += '<th style="color:#d93025;">&lt;60 Duels</th>';
+    html += '<th style="color:#d93025;">&lt;60</th>';
     html += '<th style="color:#f9ab00;">60-80</th>';
     html += '<th style="color:#34a853;">80-100</th>';
     html += '<th style="color:#1a73e8;">100+</th>';
@@ -1390,7 +1394,7 @@ window.renderCollectorsTab = function() {
     });
 
     html += '</tbody></table></div>';
-    html += '<table class="stats-table auto-w" style="border:none;border-radius:0;box-shadow:none;">';
+    html += '<table class="stats-table" style="border:none;border-radius:0;box-shadow:none;">';
     html += '<tfoot><tr>';
     html += '<td colspan="2">Total</td>';
     html += '<td>' + totals.parts + '</td>';
@@ -1399,22 +1403,22 @@ window.renderCollectorsTab = function() {
     html += '<td>' + totals.f80 + '</td>';
     html += '<td>' + totals.o100 + '</td>';
     html += '</tr></tfoot></table></div>';
+    html += '</div>';
 
-    // View 2: Reviewed Duels Added — Collector Summary
-    html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:32px 0 12px;">Reviewed Duels Added (Before vs Current)</h2>';
+    // ── RIGHT: Per-Collector Review Summary ──
+    html += '<div style="flex:1;min-width:380px;">';
+    html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:0 0 8px;">Reviewed Duels Added (Before vs Current)</h2>';
 
     if (d.reviewCollectorSummary.length === 0) {
-      html += '<p style="color:#5f6368;font-size:13px;">No reviewed parts found for assigned collectors.</p>';
+      html += '<p style="color:#5f6368;font-size:13px;">No reviewed parts found.</p>';
     } else {
-      // Collector summary table
-      html += '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin:0 0 8px;">Per-Collector Summary</h3>';
       html += '<button class="export-btn" onclick="exportTableCsv(\'review-summary-table\',\'reviewed-collector-summary\')">&#x2913; Export CSV</button>';
       html += '<div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">';
-      html += '<div style="max-height:400px;overflow-y:auto;">';
-      html += '<table class="stats-table auto-w" id="review-summary-table" style="border:none;border-radius:0;box-shadow:none;">';
+      html += '<div style="max-height:500px;overflow-y:auto;">';
+      html += '<table class="stats-table" id="review-summary-table" style="border:none;border-radius:0;box-shadow:none;">';
       html += '<thead style="position:sticky;top:0;z-index:1;"><tr>';
       html += '<th>HR Code</th><th>Name</th><th>Reviewed Parts</th>';
-      html += '<th>Total Duels Added</th><th>Avg Duels Added / Part</th>';
+      html += '<th>Total Added</th><th>Avg / Part</th>';
       html += '</tr></thead><tbody>';
 
       var rTotals = { parts: 0, duels: 0 };
@@ -1434,20 +1438,24 @@ window.renderCollectorsTab = function() {
 
       var overallAvg = rTotals.parts > 0 ? Math.round(rTotals.duels / rTotals.parts * 10) / 10 : 0;
       html += '</tbody></table></div>';
-      html += '<table class="stats-table auto-w" style="border:none;border-radius:0;box-shadow:none;">';
+      html += '<table class="stats-table" style="border:none;border-radius:0;box-shadow:none;">';
       html += '<tfoot><tr>';
       html += '<td colspan="2">Total</td>';
       html += '<td>' + rTotals.parts + '</td>';
       html += '<td>' + (rTotals.duels > 0 ? '+' : '') + rTotals.duels + '</td>';
       html += '<td>' + (overallAvg > 0 ? '+' : '') + overallAvg + '</td>';
       html += '</tr></tfoot></table></div>';
+    }
+    html += '</div>';
+    html += '</div>'; // end flex row
 
-      // Per-part detail table
+    // ── Full-width: Per-Part Detail ──
+    if (d.reviewCollectorSummary.length > 0) {
       html += '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin:24px 0 8px;">Per-Part Detail</h3>';
       html += '<button class="export-btn" onclick="exportTableCsv(\'review-detail-table\',\'reviewed-parts-detail\')">&#x2913; Export CSV</button>';
       html += '<div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">';
       html += '<div style="max-height:500px;overflow-y:auto;">';
-      html += '<table class="stats-table auto-w" id="review-detail-table" style="border:none;border-radius:0;box-shadow:none;">';
+      html += '<table class="stats-table" id="review-detail-table" style="border:none;border-radius:0;box-shadow:none;">';
       html += '<thead style="position:sticky;top:0;z-index:1;"><tr>';
       html += '<th>Match ID</th><th>Part ID</th><th>HR Code</th><th>Name</th>';
       html += '<th>Competition</th><th>Before Total</th><th>After Total</th><th>Diff</th>';
