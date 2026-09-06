@@ -379,6 +379,7 @@ window.switchView = function(id) {
   if (id === 'comparison') setTimeout(renderComparison, 50);
   if (id === 'cmptable') setTimeout(renderCmpTablePage, 50);
   if (id === 'cmpcomp') setTimeout(renderCmpCompPage, 50);
+  if (id === 'collectors') setTimeout(renderCollectorsTab, 50);
 };
 
 var viewState = {
@@ -1316,6 +1317,159 @@ function showError(msg) {
   var el = document.getElementById('error-box');
   el.style.display = 'block';
   el.textContent = '⚠  ' + msg;
+}
+
+// ── Collectors Tab ──────────────────────────────────────────────────────────
+var collectorsData = null;
+var collectorsLoaded = false;
+
+function loadCollectorsData(cb) {
+  if (collectorsData) { cb(); return; }
+  fetch('/api/collectors')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) { showError('Collectors: ' + data.error); return; }
+      collectorsData = data;
+      collectorsLoaded = true;
+      cb();
+    })
+    .catch(function(e) { showError('Collectors fetch failed: ' + e.message); });
+}
+
+window.renderCollectorsTab = function() {
+  loadCollectorsData(function() {
+    var panel = document.getElementById('panel-collectors');
+    if (!panel || !collectorsData) return;
+
+    var d = collectorsData;
+    var html = '';
+
+    // Summary cards
+    html += '<div class="summary">';
+    html += '<div class="stat-card"><div class="val">' + d.totalMatchedParts + '</div><div class="lbl">Assigned Parts (matched)</div></div>';
+    html += '<div class="stat-card"><div class="val">' + d.collectorsOverview.length + '</div><div class="lbl">Collectors</div></div>';
+    html += '<div class="stat-card"><div class="val">' + d.totalReviewedParts + '</div><div class="lbl">Reviewed Parts</div></div>';
+    html += '<div class="stat-card"><div class="val">' + d.reviewCollectorSummary.length + '</div><div class="lbl">Collectors Reviewed</div></div>';
+    html += '</div>';
+
+    // View 1: Collector Parts Overview
+    html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:24px 0 12px;">Collector Parts Overview (Before Data)</h2>';
+    html += '<div class="table-wrap" style="max-height:500px;overflow-y:auto;">';
+    html += '<table class="stats-table" id="collectors-overview-table">';
+    html += '<thead><tr>';
+    html += '<th>HR Code</th><th>Name</th><th>Total Parts</th>';
+    html += '<th style="color:#d93025;">&lt;60 Duels</th>';
+    html += '<th style="color:#f9ab00;">60-80</th>';
+    html += '<th style="color:#34a853;">80-100</th>';
+    html += '<th style="color:#1a73e8;">100+</th>';
+    html += '</tr></thead><tbody>';
+
+    var totals = { parts: 0, u60: 0, f60: 0, f80: 0, o100: 0 };
+    d.collectorsOverview.forEach(function(c) {
+      totals.parts += c.totalParts;
+      totals.u60 += c.under60;
+      totals.f60 += c.from60to80;
+      totals.f80 += c.from80to100;
+      totals.o100 += c.over100;
+
+      html += '<tr>';
+      html += '<td>' + esc(c.hr_code) + '</td>';
+      html += '<td>' + esc(c.full_name) + '</td>';
+      html += '<td>' + c.totalParts + '</td>';
+      html += '<td' + (c.under60 > 0 ? ' style="color:#d93025;font-weight:600;"' : '') + '>' + c.under60 + '</td>';
+      html += '<td' + (c.from60to80 > 0 ? ' style="color:#f9ab00;font-weight:600;"' : '') + '>' + c.from60to80 + '</td>';
+      html += '<td' + (c.from80to100 > 0 ? ' style="color:#34a853;font-weight:600;"' : '') + '>' + c.from80to100 + '</td>';
+      html += '<td' + (c.over100 > 0 ? ' style="color:#1a73e8;font-weight:600;"' : '') + '>' + c.over100 + '</td>';
+      html += '</tr>';
+    });
+
+    html += '</tbody><tfoot><tr>';
+    html += '<td colspan="2">Total</td>';
+    html += '<td>' + totals.parts + '</td>';
+    html += '<td>' + totals.u60 + '</td>';
+    html += '<td>' + totals.f60 + '</td>';
+    html += '<td>' + totals.f80 + '</td>';
+    html += '<td>' + totals.o100 + '</td>';
+    html += '</tr></tfoot></table></div>';
+
+    // View 2: Reviewed Duels Added — Collector Summary
+    html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:32px 0 12px;">Reviewed Duels Added (Before vs Current)</h2>';
+
+    if (d.reviewCollectorSummary.length === 0) {
+      html += '<p style="color:#5f6368;font-size:13px;">No reviewed parts found for assigned collectors.</p>';
+    } else {
+      // Collector summary table
+      html += '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin:0 0 8px;">Per-Collector Summary</h3>';
+      html += '<div class="table-wrap" style="max-height:400px;overflow-y:auto;">';
+      html += '<table class="stats-table" id="review-summary-table">';
+      html += '<thead><tr>';
+      html += '<th>HR Code</th><th>Name</th><th>Reviewed Parts</th>';
+      html += '<th>Total Duels Added</th><th>Avg Duels Added / Part</th>';
+      html += '</tr></thead><tbody>';
+
+      var rTotals = { parts: 0, duels: 0 };
+      d.reviewCollectorSummary.forEach(function(c) {
+        rTotals.parts += c.reviewedParts;
+        rTotals.duels += c.totalDuelsAdded;
+
+        var diffColor = c.totalDuelsAdded > 0 ? '#34a853' : (c.totalDuelsAdded < 0 ? '#d93025' : '#5f6368');
+        html += '<tr>';
+        html += '<td>' + esc(c.hr_code) + '</td>';
+        html += '<td>' + esc(c.full_name) + '</td>';
+        html += '<td>' + c.reviewedParts + '</td>';
+        html += '<td style="color:' + diffColor + ';font-weight:600;">' + (c.totalDuelsAdded > 0 ? '+' : '') + c.totalDuelsAdded + '</td>';
+        html += '<td style="color:' + diffColor + ';font-weight:600;">' + (c.avgDuelsAdded > 0 ? '+' : '') + c.avgDuelsAdded + '</td>';
+        html += '</tr>';
+      });
+
+      var overallAvg = rTotals.parts > 0 ? Math.round(rTotals.duels / rTotals.parts * 10) / 10 : 0;
+      html += '</tbody><tfoot><tr>';
+      html += '<td colspan="2">Total</td>';
+      html += '<td>' + rTotals.parts + '</td>';
+      html += '<td>' + (rTotals.duels > 0 ? '+' : '') + rTotals.duels + '</td>';
+      html += '<td>' + (overallAvg > 0 ? '+' : '') + overallAvg + '</td>';
+      html += '</tr></tfoot></table></div>';
+
+      // Per-part detail table
+      html += '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin:24px 0 8px;">Per-Part Detail</h3>';
+      html += '<div class="table-wrap" style="max-height:500px;overflow-y:auto;">';
+      html += '<table class="stats-table" id="review-detail-table">';
+      html += '<thead><tr>';
+      html += '<th>Match ID</th><th>Part ID</th><th>HR Code</th><th>Name</th>';
+      html += '<th>Competition</th><th>Before Total</th><th>After Total</th><th>Diff</th>';
+      html += '</tr></thead><tbody>';
+
+      d.reviewedParts.forEach(function(p) {
+        var diffColor = p.diff > 0 ? '#34a853' : (p.diff < 0 ? '#d93025' : '#5f6368');
+        html += '<tr>';
+        html += '<td>' + esc(p.match_id) + '</td>';
+        html += '<td>' + esc(p.part_id) + '</td>';
+        html += '<td>' + esc(p.hr_code) + '</td>';
+        html += '<td>' + esc(p.full_name) + '</td>';
+        html += '<td>' + esc(p.competition) + '</td>';
+        html += '<td>' + p.beforeTotal + '</td>';
+        html += '<td>' + p.afterTotal + '</td>';
+        html += '<td style="color:' + diffColor + ';font-weight:600;">' + (p.diff > 0 ? '+' : '') + p.diff + '</td>';
+        html += '</tr>';
+      });
+
+      html += '</tbody></table></div>';
+    }
+
+    panel.innerHTML = html;
+    attachSortHandlers(document.getElementById('collectors-overview-table'));
+    if (document.getElementById('review-summary-table')) {
+      attachSortHandlers(document.getElementById('review-summary-table'));
+    }
+    if (document.getElementById('review-detail-table')) {
+      attachSortHandlers(document.getElementById('review-detail-table'));
+    }
+  });
+};
+
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 // Auto-register plugins when Chart.js is available
