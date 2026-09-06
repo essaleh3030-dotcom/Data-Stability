@@ -43,8 +43,19 @@ export default async function handler(req, res) {
     }
 
     // Sunday-based week start helper
+    // Google Sheets dates can be serial numbers (days since 1899-12-30) or date strings
     function weekStart(dateStr) {
-      const d = new Date(dateStr);
+      let d;
+      const raw = String(dateStr || '').trim();
+      if (!raw) return null;
+      if (/^\d+(\.\d+)?$/.test(raw)) {
+        // Google Sheets serial date number
+        const serial = parseFloat(raw);
+        if (serial < 1) return null;
+        d = new Date(Date.UTC(1899, 11, 30 + Math.floor(serial)));
+      } else {
+        d = new Date(raw);
+      }
       if (isNaN(d.getTime())) return null;
       const day = d.getUTCDay(); // 0=Sun
       d.setUTCDate(d.getUTCDate() - day);
