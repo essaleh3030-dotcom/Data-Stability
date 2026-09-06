@@ -227,6 +227,7 @@ const DASHBOARD_HTML = `
     <div class="tab"        data-view="comparison" onclick="switchView('comparison')">Reviewed Matches</div>
     <div class="tab"        data-view="cmptable"   onclick="switchView('cmptable')">Comparison Table</div>
     <div class="tab"        data-view="cmpcomp"    onclick="switchView('cmpcomp')">Competition Comparison</div>
+    <div class="tab"        data-view="collectors" onclick="switchView('collectors')">Collectors</div>
   </div>
   <div id="panel-weekly" class="view-panel active"></div>
   <div id="panel-monthly" class="view-panel">
@@ -256,5 +257,6 @@ const DASHBOARD_HTML = `
   <div id="panel-comparison" class="view-panel"></div>
   <div id="panel-cmptable" class="view-panel"></div>
   <div id="panel-cmpcomp" class="view-panel"></div>
+  <div id="panel-collectors" class="view-panel"></div>
 </div>
 `;
