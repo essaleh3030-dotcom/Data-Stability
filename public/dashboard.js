@@ -1347,6 +1347,7 @@ window.renderCollectorsTab = function() {
 
     var d = collectorsData;
     var html = '';
+    var thStyle = 'background:#f8f9fa;position:sticky;top:0;z-index:2;';
 
     // Summary cards
     html += '<div class="summary">';
@@ -1360,49 +1361,62 @@ window.renderCollectorsTab = function() {
     html += '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">';
 
     // ── LEFT: Collector Parts Overview ──
-    html += '<div style="flex:1;min-width:420px;">';
+    html += '<div style="flex:1;min-width:520px;">';
     html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:0 0 8px;">Collector Parts Overview (Before Data)</h2>';
     html += '<button class="export-btn" onclick="exportTableCsv(\'collectors-overview-table\',\'collectors-overview\')">&#x2913; Export CSV</button>';
-    html += '<div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">';
-    html += '<div style="max-height:500px;overflow-y:auto;">';
+    html += '<div style="max-height:500px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;">';
     html += '<table class="stats-table" id="collectors-overview-table" style="border:none;border-radius:0;box-shadow:none;">';
-    html += '<thead style="position:sticky;top:0;z-index:1;"><tr>';
-    html += '<th>HR Code</th><th>Name</th><th>Total Parts</th>';
-    html += '<th style="color:#d93025;">&lt;60</th>';
-    html += '<th style="color:#f9ab00;">60-80</th>';
-    html += '<th style="color:#34a853;">80-100</th>';
-    html += '<th style="color:#1a73e8;">100+</th>';
+    html += '<thead><tr>';
+    html += '<th style="' + thStyle + '">HR Code</th>';
+    html += '<th style="' + thStyle + '">Name</th>';
+    html += '<th style="' + thStyle + '">Total</th>';
+    html += '<th style="' + thStyle + 'color:#d93025;">&lt;20</th>';
+    html += '<th style="' + thStyle + 'color:#c62828;">20-30</th>';
+    html += '<th style="' + thStyle + 'color:#e65100;">30-40</th>';
+    html += '<th style="' + thStyle + 'color:#f9ab00;">40-60</th>';
+    html += '<th style="' + thStyle + 'color:#ff8f00;">60-80</th>';
+    html += '<th style="' + thStyle + 'color:#34a853;">80-100</th>';
+    html += '<th style="' + thStyle + 'color:#1a73e8;">100+</th>';
     html += '</tr></thead><tbody>';
 
-    var totals = { parts: 0, u60: 0, f60: 0, f80: 0, o100: 0 };
+    var totals = { parts:0, u20:0, f20:0, f30:0, f40:0, f60:0, f80:0, o100:0 };
     d.collectorsOverview.forEach(function(c) {
       totals.parts += c.totalParts;
-      totals.u60 += c.under60;
-      totals.f60 += c.from60to80;
-      totals.f80 += c.from80to100;
+      totals.u20  += (c.under20 || 0);
+      totals.f20  += (c.from20to30 || 0);
+      totals.f30  += (c.from30to40 || 0);
+      totals.f40  += (c.from40to60 || 0);
+      totals.f60  += c.from60to80;
+      totals.f80  += c.from80to100;
       totals.o100 += c.over100;
 
+      function cc(v, clr) { return v > 0 ? ' style="color:'+clr+';font-weight:600;"' : ''; }
       html += '<tr>';
       html += '<td>' + esc(c.hr_code) + '</td>';
       html += '<td>' + esc(c.full_name) + '</td>';
       html += '<td>' + c.totalParts + '</td>';
-      html += '<td' + (c.under60 > 0 ? ' style="color:#d93025;font-weight:600;"' : '') + '>' + c.under60 + '</td>';
-      html += '<td' + (c.from60to80 > 0 ? ' style="color:#f9ab00;font-weight:600;"' : '') + '>' + c.from60to80 + '</td>';
-      html += '<td' + (c.from80to100 > 0 ? ' style="color:#34a853;font-weight:600;"' : '') + '>' + c.from80to100 + '</td>';
-      html += '<td' + (c.over100 > 0 ? ' style="color:#1a73e8;font-weight:600;"' : '') + '>' + c.over100 + '</td>';
+      html += '<td' + cc(c.under20||0,'#d93025') + '>' + (c.under20||0) + '</td>';
+      html += '<td' + cc(c.from20to30||0,'#c62828') + '>' + (c.from20to30||0) + '</td>';
+      html += '<td' + cc(c.from30to40||0,'#e65100') + '>' + (c.from30to40||0) + '</td>';
+      html += '<td' + cc(c.from40to60||0,'#f9ab00') + '>' + (c.from40to60||0) + '</td>';
+      html += '<td' + cc(c.from60to80,'#ff8f00') + '>' + c.from60to80 + '</td>';
+      html += '<td' + cc(c.from80to100,'#34a853') + '>' + c.from80to100 + '</td>';
+      html += '<td' + cc(c.over100,'#1a73e8') + '>' + c.over100 + '</td>';
       html += '</tr>';
     });
 
-    html += '</tbody></table></div>';
-    html += '<table class="stats-table" style="border:none;border-radius:0;box-shadow:none;">';
-    html += '<tfoot><tr>';
+    html += '<tr style="background:#e8f0fe;font-weight:700;color:#1a73e8;border-top:2px solid #1a73e8;">';
     html += '<td colspan="2">Total</td>';
     html += '<td>' + totals.parts + '</td>';
-    html += '<td>' + totals.u60 + '</td>';
+    html += '<td>' + totals.u20 + '</td>';
+    html += '<td>' + totals.f20 + '</td>';
+    html += '<td>' + totals.f30 + '</td>';
+    html += '<td>' + totals.f40 + '</td>';
     html += '<td>' + totals.f60 + '</td>';
     html += '<td>' + totals.f80 + '</td>';
     html += '<td>' + totals.o100 + '</td>';
-    html += '</tr></tfoot></table></div>';
+    html += '</tr>';
+    html += '</tbody></table></div>';
     html += '</div>';
 
     // ── RIGHT: Per-Collector Review Summary ──
@@ -1413,12 +1427,14 @@ window.renderCollectorsTab = function() {
       html += '<p style="color:#5f6368;font-size:13px;">No reviewed parts found.</p>';
     } else {
       html += '<button class="export-btn" onclick="exportTableCsv(\'review-summary-table\',\'reviewed-collector-summary\')">&#x2913; Export CSV</button>';
-      html += '<div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">';
-      html += '<div style="max-height:500px;overflow-y:auto;">';
+      html += '<div style="max-height:500px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;">';
       html += '<table class="stats-table" id="review-summary-table" style="border:none;border-radius:0;box-shadow:none;">';
-      html += '<thead style="position:sticky;top:0;z-index:1;"><tr>';
-      html += '<th>HR Code</th><th>Name</th><th>Reviewed Parts</th>';
-      html += '<th>Total Added</th><th>Avg / Part</th>';
+      html += '<thead><tr>';
+      html += '<th style="' + thStyle + '">HR Code</th>';
+      html += '<th style="' + thStyle + '">Name</th>';
+      html += '<th style="' + thStyle + '">Reviewed Parts</th>';
+      html += '<th style="' + thStyle + '">Total Added</th>';
+      html += '<th style="' + thStyle + '">Avg / Part</th>';
       html += '</tr></thead><tbody>';
 
       var rTotals = { parts: 0, duels: 0 };
@@ -1437,14 +1453,13 @@ window.renderCollectorsTab = function() {
       });
 
       var overallAvg = rTotals.parts > 0 ? Math.round(rTotals.duels / rTotals.parts * 10) / 10 : 0;
-      html += '</tbody></table></div>';
-      html += '<table class="stats-table" style="border:none;border-radius:0;box-shadow:none;">';
-      html += '<tfoot><tr>';
+      html += '<tr style="background:#e8f0fe;font-weight:700;color:#1a73e8;border-top:2px solid #1a73e8;">';
       html += '<td colspan="2">Total</td>';
       html += '<td>' + rTotals.parts + '</td>';
       html += '<td>' + (rTotals.duels > 0 ? '+' : '') + rTotals.duels + '</td>';
       html += '<td>' + (overallAvg > 0 ? '+' : '') + overallAvg + '</td>';
-      html += '</tr></tfoot></table></div>';
+      html += '</tr>';
+      html += '</tbody></table></div>';
     }
     html += '</div>';
     html += '</div>'; // end flex row
@@ -1453,12 +1468,17 @@ window.renderCollectorsTab = function() {
     if (d.reviewCollectorSummary.length > 0) {
       html += '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin:24px 0 8px;">Per-Part Detail</h3>';
       html += '<button class="export-btn" onclick="exportTableCsv(\'review-detail-table\',\'reviewed-parts-detail\')">&#x2913; Export CSV</button>';
-      html += '<div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">';
-      html += '<div style="max-height:500px;overflow-y:auto;">';
+      html += '<div style="max-height:500px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;">';
       html += '<table class="stats-table" id="review-detail-table" style="border:none;border-radius:0;box-shadow:none;">';
-      html += '<thead style="position:sticky;top:0;z-index:1;"><tr>';
-      html += '<th>Match ID</th><th>Part ID</th><th>HR Code</th><th>Name</th>';
-      html += '<th>Competition</th><th>Before Total</th><th>After Total</th><th>Diff</th>';
+      html += '<thead><tr>';
+      html += '<th style="' + thStyle + '">Match ID</th>';
+      html += '<th style="' + thStyle + '">Part ID</th>';
+      html += '<th style="' + thStyle + '">HR Code</th>';
+      html += '<th style="' + thStyle + '">Name</th>';
+      html += '<th style="' + thStyle + '">Competition</th>';
+      html += '<th style="' + thStyle + '">Before Total</th>';
+      html += '<th style="' + thStyle + '">After Total</th>';
+      html += '<th style="' + thStyle + '">Diff</th>';
       html += '</tr></thead><tbody>';
 
       d.reviewedParts.forEach(function(p) {
@@ -1475,17 +1495,11 @@ window.renderCollectorsTab = function() {
         html += '</tr>';
       });
 
-      html += '</tbody></table></div></div>';
+      html += '</tbody></table></div>';
     }
 
     panel.innerHTML = html;
-    attachSortHandlers(document.getElementById('collectors-overview-table'));
-    if (document.getElementById('review-summary-table')) {
-      attachSortHandlers(document.getElementById('review-summary-table'));
-    }
-    if (document.getElementById('review-detail-table')) {
-      attachSortHandlers(document.getElementById('review-detail-table'));
-    }
+    attachSortHandlers(panel);
   });
 };
 

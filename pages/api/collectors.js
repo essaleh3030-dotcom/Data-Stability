@@ -160,7 +160,10 @@ export default async function handler(req, res) {
           hr_code: assign.hr_code,
           full_name: assign.full_name,
           totalParts: 0,
-          under60: 0,
+          under20: 0,
+          from20to30: 0,
+          from30to40: 0,
+          from40to60: 0,
           from60to80: 0,
           from80to100: 0,
           over100: 0,
@@ -172,7 +175,10 @@ export default async function handler(req, res) {
       c.totalParts++;
 
       const duels = before.total;
-      if (duels < 60) c.under60++;
+      if (duels < 20) c.under20++;
+      else if (duels < 30) c.from20to30++;
+      else if (duels < 40) c.from30to40++;
+      else if (duels < 60) c.from40to60++;
       else if (duels <= 80) c.from60to80++;
       else if (duels <= 100) c.from80to100++;
       else c.over100++;
