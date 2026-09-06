@@ -134,6 +134,14 @@ const DASHBOARD_HTML = `
     border-radius: 8px; overflow: hidden;
     box-shadow: 0 1px 2px rgba(0,0,0,.06); border: 1px solid #e0e0e0;
   }
+  .stats-table.auto-w { width: auto; min-width: 600px; }
+  .export-btn {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 5px 14px; font-size: 12px; font-weight: 500;
+    border: 1px solid #dadce0; background: #fff; border-radius: 4px;
+    cursor: pointer; color: #1a73e8; margin-bottom: 8px;
+  }
+  .export-btn:hover { background: #e8f0fe; }
   .stats-table th, .stats-table td {
     padding: 8px 10px; border-bottom: 1px solid #eee; text-align: right; white-space: nowrap;
   }

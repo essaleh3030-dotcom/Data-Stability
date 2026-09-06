@@ -755,7 +755,8 @@ function renderCompetitionTable(rows) {
     '<td>' + fmtNum(overallShow) + '</td></tr>';
 
   body.innerHTML =
-    '<div class="table-wrap"><table class="stats-table">' +
+    '<button class="export-btn" onclick="exportTableCsv(\'comp-table\',\'table-by-competition\')">&#x2913; Export CSV</button>' +
+    '<div class="table-wrap"><table class="stats-table" id="comp-table">' +
     '<thead><tr>' + head + '</tr></thead>' +
     '<tbody>' + rowsHtml + '</tbody>' +
     '<tfoot>' + foot + '</tfoot>' +
@@ -1129,11 +1130,13 @@ function renderCmpTablePage(){
 
     var html = '<div style="padding:24px;">'+
       '<h2 style="font-size:16px;font-weight:600;margin-bottom:16px;">Event Comparison — '+CMP_TOTAL_MATCHES+' Reviewed Matches ('+CMP_TOTAL_PARTS+' parts)</h2>'+
-      '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">';
+      '<button class="export-btn" onclick="exportTableCsv(\'cmp-evt-avg-table\',\'reviewed-event-avg\')">&#x2913; Export Event Avg CSV</button> '+
+      '<button class="export-btn" onclick="exportTableCsv(\'cmp-parts-table\',\'reviewed-parts-detail\')">&#x2913; Export Parts CSV</button>'+
+      '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;margin-top:12px;">';
 
     html += '<div style="flex:1;min-width:340px;">'+
       '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin-bottom:8px;">Average per Part (Before → After)</h3>'+
-      '<div class="table-wrap"><table class="stats-table">'+
+      '<div class="table-wrap"><table class="stats-table" id="cmp-evt-avg-table">'+
       '<thead><tr>'+['Event','Before','After','Diff','%'].map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr></thead><tbody>';
     html += evtRows.map(function(r){
       var hi = r.d===maxD?' class="highest"':'';
@@ -1154,7 +1157,7 @@ function renderCmpTablePage(){
     html += '<div style="flex:1;min-width:340px;display:flex;flex-direction:column;">'+
       '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin-bottom:8px;">Total Duels per Part (Before → After)</h3>'+
       '<div style="flex:1;overflow-y:auto;max-height:450px;border:1px solid #e0e0e0;border-radius:8px 8px 0 0;">'+
-      '<table class="stats-table" style="border-radius:0;border:none;box-shadow:none;">'+
+      '<table class="stats-table" id="cmp-parts-table" style="border-radius:0;border:none;box-shadow:none;">'+
       '<thead style="position:sticky;top:0;background:#fff;z-index:1;"><tr><th>Match</th><th>Part</th><th>Week</th><th>Before</th><th>After</th><th>Diff</th></tr></thead><tbody>';
     var pBTotal = 0, pATotal = 0;
     parts.forEach(function(p){
@@ -1228,6 +1231,7 @@ function renderCmpCompPage(){
 
     var html = '<div style="padding:24px;">'+
       '<h2 style="font-size:16px;font-weight:600;margin-bottom:16px;">Comparison by Competition — '+CMP_TOTAL_MATCHES+' Reviewed Matches ('+CMP_TOTAL_PARTS+' parts)</h2>'+
+      '<button class="export-btn" onclick="exportTableCsv(\'compCompTable\',\'competition-comparison\')">&#x2913; Export CSV</button>'+
       '<div class="table-wrap"><table class="stats-table" id="compCompTable">'+
       '<thead><tr>'+
       '<th data-col="0" style="text-align:left;cursor:pointer;">Competition ⇅</th>'+
@@ -1354,9 +1358,11 @@ window.renderCollectorsTab = function() {
 
     // View 1: Collector Parts Overview
     html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:24px 0 12px;">Collector Parts Overview (Before Data)</h2>';
-    html += '<div class="table-wrap" style="max-height:500px;overflow-y:auto;">';
-    html += '<table class="stats-table" id="collectors-overview-table">';
-    html += '<thead><tr>';
+    html += '<button class="export-btn" onclick="exportTableCsv(\'collectors-overview-table\',\'collectors-overview\')">&#x2913; Export CSV</button>';
+    html += '<div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">';
+    html += '<div style="max-height:450px;overflow-y:auto;">';
+    html += '<table class="stats-table auto-w" id="collectors-overview-table" style="border:none;border-radius:0;box-shadow:none;">';
+    html += '<thead style="position:sticky;top:0;z-index:1;"><tr>';
     html += '<th>HR Code</th><th>Name</th><th>Total Parts</th>';
     html += '<th style="color:#d93025;">&lt;60 Duels</th>';
     html += '<th style="color:#f9ab00;">60-80</th>';
@@ -1383,7 +1389,9 @@ window.renderCollectorsTab = function() {
       html += '</tr>';
     });
 
-    html += '</tbody><tfoot><tr>';
+    html += '</tbody></table></div>';
+    html += '<table class="stats-table auto-w" style="border:none;border-radius:0;box-shadow:none;">';
+    html += '<tfoot><tr>';
     html += '<td colspan="2">Total</td>';
     html += '<td>' + totals.parts + '</td>';
     html += '<td>' + totals.u60 + '</td>';
@@ -1400,9 +1408,11 @@ window.renderCollectorsTab = function() {
     } else {
       // Collector summary table
       html += '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin:0 0 8px;">Per-Collector Summary</h3>';
-      html += '<div class="table-wrap" style="max-height:400px;overflow-y:auto;">';
-      html += '<table class="stats-table" id="review-summary-table">';
-      html += '<thead><tr>';
+      html += '<button class="export-btn" onclick="exportTableCsv(\'review-summary-table\',\'reviewed-collector-summary\')">&#x2913; Export CSV</button>';
+      html += '<div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">';
+      html += '<div style="max-height:400px;overflow-y:auto;">';
+      html += '<table class="stats-table auto-w" id="review-summary-table" style="border:none;border-radius:0;box-shadow:none;">';
+      html += '<thead style="position:sticky;top:0;z-index:1;"><tr>';
       html += '<th>HR Code</th><th>Name</th><th>Reviewed Parts</th>';
       html += '<th>Total Duels Added</th><th>Avg Duels Added / Part</th>';
       html += '</tr></thead><tbody>';
@@ -1423,7 +1433,9 @@ window.renderCollectorsTab = function() {
       });
 
       var overallAvg = rTotals.parts > 0 ? Math.round(rTotals.duels / rTotals.parts * 10) / 10 : 0;
-      html += '</tbody><tfoot><tr>';
+      html += '</tbody></table></div>';
+      html += '<table class="stats-table auto-w" style="border:none;border-radius:0;box-shadow:none;">';
+      html += '<tfoot><tr>';
       html += '<td colspan="2">Total</td>';
       html += '<td>' + rTotals.parts + '</td>';
       html += '<td>' + (rTotals.duels > 0 ? '+' : '') + rTotals.duels + '</td>';
@@ -1432,9 +1444,11 @@ window.renderCollectorsTab = function() {
 
       // Per-part detail table
       html += '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin:24px 0 8px;">Per-Part Detail</h3>';
-      html += '<div class="table-wrap" style="max-height:500px;overflow-y:auto;">';
-      html += '<table class="stats-table" id="review-detail-table">';
-      html += '<thead><tr>';
+      html += '<button class="export-btn" onclick="exportTableCsv(\'review-detail-table\',\'reviewed-parts-detail\')">&#x2913; Export CSV</button>';
+      html += '<div style="border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">';
+      html += '<div style="max-height:500px;overflow-y:auto;">';
+      html += '<table class="stats-table auto-w" id="review-detail-table" style="border:none;border-radius:0;box-shadow:none;">';
+      html += '<thead style="position:sticky;top:0;z-index:1;"><tr>';
       html += '<th>Match ID</th><th>Part ID</th><th>HR Code</th><th>Name</th>';
       html += '<th>Competition</th><th>Before Total</th><th>After Total</th><th>Diff</th>';
       html += '</tr></thead><tbody>';
@@ -1453,7 +1467,7 @@ window.renderCollectorsTab = function() {
         html += '</tr>';
       });
 
-      html += '</tbody></table></div>';
+      html += '</tbody></table></div></div>';
     }
 
     panel.innerHTML = html;
@@ -1471,6 +1485,38 @@ function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+// ── CSV Export (all views) ──────────────────────────────────────────────────
+window.exportTableCsv = function(tableId, filename) {
+  var table = document.getElementById(tableId);
+  if (!table) { table = document.querySelector('#' + tableId + ' table') || document.querySelector('[data-export="' + tableId + '"]'); }
+  if (!table) return;
+  if (table.tagName !== 'TABLE') { table = table.querySelector('table'); }
+  if (!table) return;
+
+  var csv = [];
+  var rows = table.querySelectorAll('tr');
+  rows.forEach(function(row) {
+    var cols = [];
+    row.querySelectorAll('th, td').forEach(function(cell) {
+      var text = cell.innerText.replace(/"/g, '""').replace(/\n/g, ' ');
+      var colspan = parseInt(cell.getAttribute('colspan')) || 1;
+      cols.push('"' + text + '"');
+      for (var c = 1; c < colspan; c++) cols.push('""');
+    });
+    csv.push(cols.join(','));
+  });
+
+  var blob = new Blob(['﻿' + csv.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = (filename || 'export') + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+};
 
 // Auto-register plugins when Chart.js is available
 if (typeof window !== 'undefined') {
