@@ -34,6 +34,7 @@ export default async function handler(req, res) {
     const aPartIdx = aHeaders.indexOf('partid');
     const aNameIdx = aHeaders.indexOf('full_name');
     const aHrIdx = aHeaders.indexOf('hr_code');
+    const aDateIdx = aHeaders.indexOf('assignment_date');
 
     if (aMatchIdx < 0 || aPartIdx < 0 || aNameIdx < 0 || aHrIdx < 0) {
       return res.status(400).json({
@@ -41,7 +42,16 @@ export default async function handler(req, res) {
       });
     }
 
-    // Build assignments lookup: key = matchId_partId -> { hr_code, full_name }
+    // Sunday-based week start helper
+    function weekStart(dateStr) {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return null;
+      const day = d.getUTCDay(); // 0=Sun
+      d.setUTCDate(d.getUTCDate() - day);
+      return d.toISOString().slice(0, 10);
+    }
+
+    // Build assignments lookup: key = matchId_partId -> { hr_code, full_name, week }
     const assignments = {};
     for (let i = 1; i < assignVals.length; i++) {
       const row = assignVals[i];
@@ -49,8 +59,9 @@ export default async function handler(req, res) {
       const pid = String(row[aPartIdx] || '').trim();
       const hrCode = String(row[aHrIdx] || '').trim();
       const fullName = String(row[aNameIdx] || '').trim();
+      const dateVal = aDateIdx >= 0 ? String(row[aDateIdx] || '').trim() : '';
       if (!mid || !pid || !hrCode) continue;
-      assignments[`${mid}_${pid}`] = { hr_code: hrCode, full_name: fullName };
+      assignments[`${mid}_${pid}`] = { hr_code: hrCode, full_name: fullName, week: weekStart(dateVal) };
     }
 
     // 2. Read Before Dashboard to get total_duels per part
@@ -194,6 +205,29 @@ export default async function handler(req, res) {
     const collectorsOverview = Object.values(collectorMap)
       .sort((a, b) => b.totalParts - a.totalParts);
 
+    // 5b. Build weekly overview — brackets grouped by assignment week
+    const weekMap = {}; // weekStart -> { week, totalParts, under20, ... }
+    for (const [key, assign] of Object.entries(assignments)) {
+      const before = beforeData[key];
+      if (!before) continue;
+      const w = assign.week || 'Unknown';
+      if (!weekMap[w]) {
+        weekMap[w] = { week: w, totalParts: 0, under20: 0, from20to30: 0, from30to40: 0, from40to60: 0, from60to80: 0, from80to100: 0, over100: 0 };
+      }
+      const wk = weekMap[w];
+      wk.totalParts++;
+      const duels = before.total;
+      if (duels < 20) wk.under20++;
+      else if (duels < 30) wk.from20to30++;
+      else if (duels < 40) wk.from30to40++;
+      else if (duels < 60) wk.from40to60++;
+      else if (duels <= 80) wk.from60to80++;
+      else if (duels <= 100) wk.from80to100++;
+      else wk.over100++;
+    }
+    const weeklyOverview = Object.values(weekMap)
+      .sort((a, b) => (a.week < b.week ? -1 : a.week > b.week ? 1 : 0));
+
     // 6. Build View 2: Reviewed Duels Added (Before vs Current)
     const reviewedParts = [];
     const reviewCollectorMap = {}; // hr_code -> { full_name, reviewedParts, totalDuelsAdded, partCount }
@@ -245,6 +279,7 @@ export default async function handler(req, res) {
 
     const result = {
       collectorsOverview,
+      weeklyOverview,
       reviewedParts: reviewedParts.sort((a, b) => {
         if (a.hr_code !== b.hr_code) return a.hr_code.localeCompare(b.hr_code);
         return a.match_id.localeCompare(b.match_id);
