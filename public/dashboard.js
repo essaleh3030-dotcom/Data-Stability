@@ -1405,18 +1405,18 @@ window.renderCollectorsTab = function() {
       html += '</tr>';
     });
 
-    html += '<tr style="background:#e8f0fe;font-weight:700;color:#1a73e8;border-top:2px solid #1a73e8;">';
-    html += '<td colspan="2">Total</td>';
-    html += '<td>' + totals.parts + '</td>';
-    html += '<td>' + totals.u20 + '</td>';
-    html += '<td>' + totals.f20 + '</td>';
-    html += '<td>' + totals.f30 + '</td>';
-    html += '<td>' + totals.f40 + '</td>';
-    html += '<td>' + totals.f60 + '</td>';
-    html += '<td>' + totals.f80 + '</td>';
-    html += '<td>' + totals.o100 + '</td>';
-    html += '</tr>';
-    html += '</tbody></table></div>';
+    var footStyle = 'background:#e8f0fe;font-weight:700;color:#1a73e8;position:sticky;bottom:0;z-index:2;';
+    html += '</tbody><tfoot><tr>';
+    html += '<td style="' + footStyle + '" colspan="2">Total</td>';
+    html += '<td style="' + footStyle + '">' + totals.parts + '</td>';
+    html += '<td style="' + footStyle + '">' + totals.u20 + '</td>';
+    html += '<td style="' + footStyle + '">' + totals.f20 + '</td>';
+    html += '<td style="' + footStyle + '">' + totals.f30 + '</td>';
+    html += '<td style="' + footStyle + '">' + totals.f40 + '</td>';
+    html += '<td style="' + footStyle + '">' + totals.f60 + '</td>';
+    html += '<td style="' + footStyle + '">' + totals.f80 + '</td>';
+    html += '<td style="' + footStyle + '">' + totals.o100 + '</td>';
+    html += '</tr></tfoot></table></div>';
     html += '</div>';
 
     // ── RIGHT: Per-Collector Review Summary ──
@@ -1453,13 +1453,13 @@ window.renderCollectorsTab = function() {
       });
 
       var overallAvg = rTotals.parts > 0 ? Math.round(rTotals.duels / rTotals.parts * 10) / 10 : 0;
-      html += '<tr style="background:#e8f0fe;font-weight:700;color:#1a73e8;border-top:2px solid #1a73e8;">';
-      html += '<td colspan="2">Total</td>';
-      html += '<td>' + rTotals.parts + '</td>';
-      html += '<td>' + (rTotals.duels > 0 ? '+' : '') + rTotals.duels + '</td>';
-      html += '<td>' + (overallAvg > 0 ? '+' : '') + overallAvg + '</td>';
-      html += '</tr>';
-      html += '</tbody></table></div>';
+      var fs2 = 'background:#e8f0fe;font-weight:700;color:#1a73e8;position:sticky;bottom:0;z-index:2;';
+      html += '</tbody><tfoot><tr>';
+      html += '<td style="' + fs2 + '" colspan="2">Total</td>';
+      html += '<td style="' + fs2 + '">' + rTotals.parts + '</td>';
+      html += '<td style="' + fs2 + '">' + (rTotals.duels > 0 ? '+' : '') + rTotals.duels + '</td>';
+      html += '<td style="' + fs2 + '">' + (overallAvg > 0 ? '+' : '') + overallAvg + '</td>';
+      html += '</tr></tfoot></table></div>';
     }
     html += '</div>';
     html += '</div>'; // end flex row
