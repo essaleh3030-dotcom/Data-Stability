@@ -1347,7 +1347,26 @@ window.renderCollectorsTab = function() {
 
     var d = collectorsData;
     var html = '';
-    var thStyle = 'background:#f8f9fa;position:sticky;top:0;z-index:2;';
+    var tblS = 'border-radius:0;border:none;box-shadow:none;';
+    var hdS = 'position:sticky;top:0;background:#fff;z-index:1;';
+    var ftS = 'border-radius:0 0 8px 8px;border:none;box-shadow:none;border-top:none;';
+
+    function cc(v, clr) { return v > 0 ? ' style="color:'+clr+';font-weight:600;"' : ''; }
+    function bracketTH() {
+      return '<th>&lt;20</th><th>20-30</th><th>30-40</th><th>40-60</th><th>60-80</th><th>80-100</th><th>100+</th>';
+    }
+    function bracketTD(row) {
+      return '<td' + cc(row.under20||0,'#d93025') + '>' + (row.under20||0) + '</td>' +
+        '<td' + cc(row.from20to30||0,'#c62828') + '>' + (row.from20to30||0) + '</td>' +
+        '<td' + cc(row.from30to40||0,'#e65100') + '>' + (row.from30to40||0) + '</td>' +
+        '<td' + cc(row.from40to60||0,'#f9ab00') + '>' + (row.from40to60||0) + '</td>' +
+        '<td' + cc(row.from60to80||0,'#ff8f00') + '>' + (row.from60to80||0) + '</td>' +
+        '<td' + cc(row.from80to100||0,'#34a853') + '>' + (row.from80to100||0) + '</td>' +
+        '<td' + cc(row.over100||0,'#1a73e8') + '>' + (row.over100||0) + '</td>';
+    }
+    function bracketFT(t) {
+      return '<td>' + t.u20 + '</td><td>' + t.f20 + '</td><td>' + t.f30 + '</td><td>' + t.f40 + '</td><td>' + t.f60 + '</td><td>' + t.f80 + '</td><td>' + t.o100 + '</td>';
+    }
 
     // Summary cards
     html += '<div class="summary">';
@@ -1357,203 +1376,112 @@ window.renderCollectorsTab = function() {
     html += '<div class="stat-card"><div class="val">' + d.reviewCollectorSummary.length + '</div><div class="lbl">Collectors Reviewed</div></div>';
     html += '</div>';
 
-    // Two tables side by side
+    // ═══ ROW 1: Collector Overview + Review Summary ═══
     html += '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">';
 
-    // ── LEFT: Collector Parts Overview ──
-    html += '<div style="flex:1;min-width:520px;">';
+    // ── 1A: Collector Parts Overview ──
+    html += '<div style="flex:1;min-width:520px;display:flex;flex-direction:column;">';
     html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:0 0 8px;">Collector Parts Overview (Before Data)</h2>';
     html += '<button class="export-btn" onclick="exportTableCsv(\'collectors-overview-table\',\'collectors-overview\')">&#x2913; Export CSV</button>';
-    html += '<div style="max-height:500px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;">';
-    html += '<table class="stats-table" id="collectors-overview-table" style="border:none;border-radius:0;box-shadow:none;border-collapse:separate;border-spacing:0;">';
-    html += '<thead><tr>';
-    html += '<th style="' + thStyle + '">HR Code</th>';
-    html += '<th style="' + thStyle + '">Name</th>';
-    html += '<th style="' + thStyle + '">Total</th>';
-    html += '<th style="' + thStyle + 'color:#d93025;">&lt;20</th>';
-    html += '<th style="' + thStyle + 'color:#c62828;">20-30</th>';
-    html += '<th style="' + thStyle + 'color:#e65100;">30-40</th>';
-    html += '<th style="' + thStyle + 'color:#f9ab00;">40-60</th>';
-    html += '<th style="' + thStyle + 'color:#ff8f00;">60-80</th>';
-    html += '<th style="' + thStyle + 'color:#34a853;">80-100</th>';
-    html += '<th style="' + thStyle + 'color:#1a73e8;">100+</th>';
+    html += '<div style="flex:1;overflow-y:auto;max-height:450px;border:1px solid #e0e0e0;border-radius:8px 8px 0 0;">';
+    html += '<table class="stats-table" id="collectors-overview-table" style="' + tblS + '">';
+    html += '<thead style="' + hdS + '"><tr>';
+    html += '<th>HR Code</th><th>Name</th><th>Total</th>' + bracketTH();
     html += '</tr></thead><tbody>';
 
     var totals = { parts:0, u20:0, f20:0, f30:0, f40:0, f60:0, f80:0, o100:0 };
     d.collectorsOverview.forEach(function(c) {
       totals.parts += c.totalParts;
-      totals.u20  += (c.under20 || 0);
-      totals.f20  += (c.from20to30 || 0);
-      totals.f30  += (c.from30to40 || 0);
-      totals.f40  += (c.from40to60 || 0);
-      totals.f60  += c.from60to80;
-      totals.f80  += c.from80to100;
-      totals.o100 += c.over100;
-
-      function cc(v, clr) { return v > 0 ? ' style="color:'+clr+';font-weight:600;"' : ''; }
-      html += '<tr>';
-      html += '<td>' + esc(c.hr_code) + '</td>';
-      html += '<td>' + esc(c.full_name) + '</td>';
-      html += '<td>' + c.totalParts + '</td>';
-      html += '<td' + cc(c.under20||0,'#d93025') + '>' + (c.under20||0) + '</td>';
-      html += '<td' + cc(c.from20to30||0,'#c62828') + '>' + (c.from20to30||0) + '</td>';
-      html += '<td' + cc(c.from30to40||0,'#e65100') + '>' + (c.from30to40||0) + '</td>';
-      html += '<td' + cc(c.from40to60||0,'#f9ab00') + '>' + (c.from40to60||0) + '</td>';
-      html += '<td' + cc(c.from60to80,'#ff8f00') + '>' + c.from60to80 + '</td>';
-      html += '<td' + cc(c.from80to100,'#34a853') + '>' + c.from80to100 + '</td>';
-      html += '<td' + cc(c.over100,'#1a73e8') + '>' + c.over100 + '</td>';
-      html += '</tr>';
+      totals.u20 += (c.under20||0); totals.f20 += (c.from20to30||0); totals.f30 += (c.from30to40||0);
+      totals.f40 += (c.from40to60||0); totals.f60 += c.from60to80; totals.f80 += c.from80to100; totals.o100 += c.over100;
+      html += '<tr><td>' + esc(c.hr_code) + '</td><td>' + esc(c.full_name) + '</td><td>' + c.totalParts + '</td>' + bracketTD(c) + '</tr>';
     });
-
-    var footStyle = 'background:#e8f0fe;font-weight:700;color:#1a73e8;position:sticky;bottom:0;z-index:2;';
-    html += '</tbody><tfoot><tr>';
-    html += '<td style="' + footStyle + '" colspan="2">Total</td>';
-    html += '<td style="' + footStyle + '">' + totals.parts + '</td>';
-    html += '<td style="' + footStyle + '">' + totals.u20 + '</td>';
-    html += '<td style="' + footStyle + '">' + totals.f20 + '</td>';
-    html += '<td style="' + footStyle + '">' + totals.f30 + '</td>';
-    html += '<td style="' + footStyle + '">' + totals.f40 + '</td>';
-    html += '<td style="' + footStyle + '">' + totals.f60 + '</td>';
-    html += '<td style="' + footStyle + '">' + totals.f80 + '</td>';
-    html += '<td style="' + footStyle + '">' + totals.o100 + '</td>';
-    html += '</tr></tfoot></table></div>';
+    html += '</tbody></table></div>';
+    // Footer as separate table (always visible)
+    html += '<table class="stats-table" style="' + ftS + '"><tfoot><tr>';
+    html += '<td colspan="2" style="text-align:left;font-weight:700;">Total</td><td style="font-weight:700;">' + totals.parts + '</td>' + bracketFT(totals);
+    html += '</tr></tfoot></table>';
     html += '</div>';
 
-    // ── RIGHT: Per-Collector Review Summary ──
-    html += '<div style="flex:1;min-width:380px;">';
+    // ── 1B: Review Summary ──
+    html += '<div style="flex:1;min-width:380px;display:flex;flex-direction:column;">';
     html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:0 0 8px;">Reviewed Duels Added (Before vs Current)</h2>';
-
     if (d.reviewCollectorSummary.length === 0) {
       html += '<p style="color:#5f6368;font-size:13px;">No reviewed parts found.</p>';
     } else {
       html += '<button class="export-btn" onclick="exportTableCsv(\'review-summary-table\',\'reviewed-collector-summary\')">&#x2913; Export CSV</button>';
-      html += '<div style="max-height:500px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;">';
-      html += '<table class="stats-table" id="review-summary-table" style="border:none;border-radius:0;box-shadow:none;border-collapse:separate;border-spacing:0;">';
-      html += '<thead><tr>';
-      html += '<th style="' + thStyle + '">HR Code</th>';
-      html += '<th style="' + thStyle + '">Name</th>';
-      html += '<th style="' + thStyle + '">Reviewed Parts</th>';
-      html += '<th style="' + thStyle + '">Total Added</th>';
-      html += '<th style="' + thStyle + '">Avg / Part</th>';
-      html += '</tr></thead><tbody>';
+      html += '<div style="flex:1;overflow-y:auto;max-height:450px;border:1px solid #e0e0e0;border-radius:8px 8px 0 0;">';
+      html += '<table class="stats-table" id="review-summary-table" style="' + tblS + '">';
+      html += '<thead style="' + hdS + '"><tr><th>HR Code</th><th>Name</th><th>Reviewed Parts</th><th>Total Added</th><th>Avg / Part</th></tr></thead><tbody>';
 
       var rTotals = { parts: 0, duels: 0 };
       d.reviewCollectorSummary.forEach(function(c) {
         rTotals.parts += c.reviewedParts;
         rTotals.duels += c.totalDuelsAdded;
-
-        var diffColor = c.totalDuelsAdded > 0 ? '#34a853' : (c.totalDuelsAdded < 0 ? '#d93025' : '#5f6368');
-        html += '<tr>';
-        html += '<td>' + esc(c.hr_code) + '</td>';
-        html += '<td>' + esc(c.full_name) + '</td>';
-        html += '<td>' + c.reviewedParts + '</td>';
-        html += '<td style="color:' + diffColor + ';font-weight:600;">' + (c.totalDuelsAdded > 0 ? '+' : '') + c.totalDuelsAdded + '</td>';
-        html += '<td style="color:' + diffColor + ';font-weight:600;">' + (c.avgDuelsAdded > 0 ? '+' : '') + c.avgDuelsAdded + '</td>';
-        html += '</tr>';
+        var dc = c.totalDuelsAdded > 0 ? '#34a853' : (c.totalDuelsAdded < 0 ? '#d93025' : '#5f6368');
+        html += '<tr><td>' + esc(c.hr_code) + '</td><td>' + esc(c.full_name) + '</td><td>' + c.reviewedParts + '</td>';
+        html += '<td style="color:' + dc + ';font-weight:600;">' + (c.totalDuelsAdded > 0 ? '+' : '') + c.totalDuelsAdded + '</td>';
+        html += '<td style="color:' + dc + ';font-weight:600;">' + (c.avgDuelsAdded > 0 ? '+' : '') + c.avgDuelsAdded + '</td></tr>';
       });
+      html += '</tbody></table></div>';
 
       var overallAvg = rTotals.parts > 0 ? Math.round(rTotals.duels / rTotals.parts * 10) / 10 : 0;
-      var fs2 = 'background:#e8f0fe;font-weight:700;color:#1a73e8;position:sticky;bottom:0;z-index:2;';
-      html += '</tbody><tfoot><tr>';
-      html += '<td style="' + fs2 + '" colspan="2">Total</td>';
-      html += '<td style="' + fs2 + '">' + rTotals.parts + '</td>';
-      html += '<td style="' + fs2 + '">' + (rTotals.duels > 0 ? '+' : '') + rTotals.duels + '</td>';
-      html += '<td style="' + fs2 + '">' + (overallAvg > 0 ? '+' : '') + overallAvg + '</td>';
-      html += '</tr></tfoot></table></div>';
+      html += '<table class="stats-table" style="' + ftS + '"><tfoot><tr>';
+      html += '<td colspan="2" style="text-align:left;font-weight:700;">Total</td>';
+      html += '<td style="font-weight:700;">' + rTotals.parts + '</td>';
+      html += '<td style="font-weight:700;color:#1a73e8;">' + (rTotals.duels > 0 ? '+' : '') + rTotals.duels + '</td>';
+      html += '<td style="font-weight:700;color:#1a73e8;">' + (overallAvg > 0 ? '+' : '') + overallAvg + '</td>';
+      html += '</tr></tfoot></table>';
     }
     html += '</div>';
-    html += '</div>'; // end flex row
+    html += '</div>'; // end row 1
 
-    // ── Weekly Breakdown Table ──
+    // ═══ ROW 2: Weekly Breakdown + Per-Part Detail ═══
+    html += '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;margin-top:24px;">';
+
+    // ── 2A: Weekly Breakdown ──
     if (d.weeklyOverview && d.weeklyOverview.length > 0) {
-      html += '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin:24px 0 8px;">Weekly Breakdown (Before Data)</h3>';
+      html += '<div style="flex:1;min-width:520px;display:flex;flex-direction:column;">';
+      html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:0 0 8px;">Weekly Breakdown (Before Data)</h2>';
       html += '<button class="export-btn" onclick="exportTableCsv(\'weekly-overview-table\',\'weekly-overview\')">&#x2913; Export CSV</button>';
-      html += '<div style="max-height:400px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;">';
-      html += '<table class="stats-table" id="weekly-overview-table" style="border:none;border-radius:0;box-shadow:none;border-collapse:separate;border-spacing:0;">';
-      html += '<thead><tr>';
-      html += '<th style="' + thStyle + '">Week</th>';
-      html += '<th style="' + thStyle + '">Total</th>';
-      html += '<th style="' + thStyle + 'color:#d93025;">&lt;20</th>';
-      html += '<th style="' + thStyle + 'color:#c62828;">20-30</th>';
-      html += '<th style="' + thStyle + 'color:#e65100;">30-40</th>';
-      html += '<th style="' + thStyle + 'color:#f9ab00;">40-60</th>';
-      html += '<th style="' + thStyle + 'color:#ff8f00;">60-80</th>';
-      html += '<th style="' + thStyle + 'color:#34a853;">80-100</th>';
-      html += '<th style="' + thStyle + 'color:#1a73e8;">100+</th>';
-      html += '</tr></thead><tbody>';
+      html += '<div style="flex:1;overflow-y:auto;max-height:450px;border:1px solid #e0e0e0;border-radius:8px 8px 0 0;">';
+      html += '<table class="stats-table" id="weekly-overview-table" style="' + tblS + '">';
+      html += '<thead style="' + hdS + '"><tr><th>Week</th><th>Total</th>' + bracketTH() + '</tr></thead><tbody>';
 
       var wTotals = { parts:0, u20:0, f20:0, f30:0, f40:0, f60:0, f80:0, o100:0 };
       d.weeklyOverview.forEach(function(w) {
-        wTotals.parts += w.totalParts;
-        wTotals.u20  += w.under20;
-        wTotals.f20  += w.from20to30;
-        wTotals.f30  += w.from30to40;
-        wTotals.f40  += w.from40to60;
-        wTotals.f60  += w.from60to80;
-        wTotals.f80  += w.from80to100;
-        wTotals.o100 += w.over100;
-
-        function cc(v, clr) { return v > 0 ? ' style="color:'+clr+';font-weight:600;"' : ''; }
-        html += '<tr>';
-        html += '<td>' + esc(w.week) + '</td>';
-        html += '<td>' + w.totalParts + '</td>';
-        html += '<td' + cc(w.under20,'#d93025') + '>' + w.under20 + '</td>';
-        html += '<td' + cc(w.from20to30,'#c62828') + '>' + w.from20to30 + '</td>';
-        html += '<td' + cc(w.from30to40,'#e65100') + '>' + w.from30to40 + '</td>';
-        html += '<td' + cc(w.from40to60,'#f9ab00') + '>' + w.from40to60 + '</td>';
-        html += '<td' + cc(w.from60to80,'#ff8f00') + '>' + w.from60to80 + '</td>';
-        html += '<td' + cc(w.from80to100,'#34a853') + '>' + w.from80to100 + '</td>';
-        html += '<td' + cc(w.over100,'#1a73e8') + '>' + w.over100 + '</td>';
-        html += '</tr>';
+        wTotals.parts += w.totalParts; wTotals.u20 += w.under20; wTotals.f20 += w.from20to30;
+        wTotals.f30 += w.from30to40; wTotals.f40 += w.from40to60; wTotals.f60 += w.from60to80;
+        wTotals.f80 += w.from80to100; wTotals.o100 += w.over100;
+        html += '<tr><td>' + esc(w.week) + '</td><td>' + w.totalParts + '</td>' + bracketTD(w) + '</tr>';
       });
-
-      var wf = 'background:#e8f0fe;font-weight:700;color:#1a73e8;position:sticky;bottom:0;z-index:2;';
-      html += '</tbody><tfoot><tr>';
-      html += '<td style="' + wf + '">Total</td>';
-      html += '<td style="' + wf + '">' + wTotals.parts + '</td>';
-      html += '<td style="' + wf + '">' + wTotals.u20 + '</td>';
-      html += '<td style="' + wf + '">' + wTotals.f20 + '</td>';
-      html += '<td style="' + wf + '">' + wTotals.f30 + '</td>';
-      html += '<td style="' + wf + '">' + wTotals.f40 + '</td>';
-      html += '<td style="' + wf + '">' + wTotals.f60 + '</td>';
-      html += '<td style="' + wf + '">' + wTotals.f80 + '</td>';
-      html += '<td style="' + wf + '">' + wTotals.o100 + '</td>';
-      html += '</tr></tfoot></table></div>';
+      html += '</tbody></table></div>';
+      html += '<table class="stats-table" style="' + ftS + '"><tfoot><tr>';
+      html += '<td style="text-align:left;font-weight:700;">Total</td><td style="font-weight:700;">' + wTotals.parts + '</td>' + bracketFT(wTotals);
+      html += '</tr></tfoot></table>';
+      html += '</div>';
     }
 
-    // ── Full-width: Per-Part Detail ──
+    // ── 2B: Per-Part Detail ──
     if (d.reviewCollectorSummary.length > 0) {
-      html += '<h3 style="font-size:13px;font-weight:600;color:#5f6368;margin:24px 0 8px;">Per-Part Detail</h3>';
+      html += '<div style="flex:1;min-width:500px;display:flex;flex-direction:column;">';
+      html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:0 0 8px;">Per-Part Detail</h2>';
       html += '<button class="export-btn" onclick="exportTableCsv(\'review-detail-table\',\'reviewed-parts-detail\')">&#x2913; Export CSV</button>';
-      html += '<div style="max-height:500px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;">';
-      html += '<table class="stats-table" id="review-detail-table" style="border:none;border-radius:0;box-shadow:none;border-collapse:separate;border-spacing:0;">';
-      html += '<thead><tr>';
-      html += '<th style="' + thStyle + '">Match ID</th>';
-      html += '<th style="' + thStyle + '">Part ID</th>';
-      html += '<th style="' + thStyle + '">HR Code</th>';
-      html += '<th style="' + thStyle + '">Name</th>';
-      html += '<th style="' + thStyle + '">Competition</th>';
-      html += '<th style="' + thStyle + '">Before Total</th>';
-      html += '<th style="' + thStyle + '">After Total</th>';
-      html += '<th style="' + thStyle + '">Diff</th>';
-      html += '</tr></thead><tbody>';
+      html += '<div style="flex:1;overflow-y:auto;max-height:450px;border:1px solid #e0e0e0;border-radius:8px 8px 0 0;">';
+      html += '<table class="stats-table" id="review-detail-table" style="' + tblS + '">';
+      html += '<thead style="' + hdS + '"><tr><th>Match ID</th><th>Part ID</th><th>HR Code</th><th>Name</th><th>Competition</th><th>Before</th><th>After</th><th>Diff</th></tr></thead><tbody>';
 
       d.reviewedParts.forEach(function(p) {
-        var diffColor = p.diff > 0 ? '#34a853' : (p.diff < 0 ? '#d93025' : '#5f6368');
-        html += '<tr>';
-        html += '<td>' + esc(p.match_id) + '</td>';
-        html += '<td>' + esc(p.part_id) + '</td>';
-        html += '<td>' + esc(p.hr_code) + '</td>';
-        html += '<td>' + esc(p.full_name) + '</td>';
-        html += '<td>' + esc(p.competition) + '</td>';
-        html += '<td>' + p.beforeTotal + '</td>';
-        html += '<td>' + p.afterTotal + '</td>';
-        html += '<td style="color:' + diffColor + ';font-weight:600;">' + (p.diff > 0 ? '+' : '') + p.diff + '</td>';
-        html += '</tr>';
+        var dc = p.diff > 0 ? '#34a853' : (p.diff < 0 ? '#d93025' : '#5f6368');
+        html += '<tr><td>' + esc(p.match_id) + '</td><td>' + esc(p.part_id) + '</td><td>' + esc(p.hr_code) + '</td>';
+        html += '<td>' + esc(p.full_name) + '</td><td>' + esc(p.competition) + '</td>';
+        html += '<td>' + p.beforeTotal + '</td><td>' + p.afterTotal + '</td>';
+        html += '<td style="color:' + dc + ';font-weight:600;">' + (p.diff > 0 ? '+' : '') + p.diff + '</td></tr>';
       });
-
       html += '</tbody></table></div>';
+      html += '</div>';
     }
+    html += '</div>'; // end row 2
 
     panel.innerHTML = html;
     attachSortHandlers(panel);

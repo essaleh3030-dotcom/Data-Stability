@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     const aPartIdx = aHeaders.indexOf('partid');
     const aNameIdx = aHeaders.indexOf('full_name');
     const aHrIdx = aHeaders.indexOf('hr_code');
-    const aDateIdx = aHeaders.indexOf('assignment_date');
+    const aDateIdx = aHeaders.indexOf('tornado_first_completion');
 
     if (aMatchIdx < 0 || aPartIdx < 0 || aNameIdx < 0 || aHrIdx < 0) {
       return res.status(400).json({
