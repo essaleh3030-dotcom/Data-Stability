@@ -1353,19 +1353,20 @@ window.renderCollectorsTab = function() {
 
     function cc(v, clr) { return v > 0 ? ' style="color:'+clr+';font-weight:600;"' : ''; }
     function bracketTH() {
-      return '<th>&lt;20</th><th>20-30</th><th>30-40</th><th>40-60</th><th>60-80</th><th>80-100</th><th>100+</th>';
+      return '<th>&lt;20</th><th>20-30</th><th>30-40</th><th>40-50</th><th>50-60</th><th>60-80</th><th>80-100</th><th>100+</th>';
     }
     function bracketTD(row) {
       return '<td' + cc(row.under20||0,'#d93025') + '>' + (row.under20||0) + '</td>' +
         '<td' + cc(row.from20to30||0,'#c62828') + '>' + (row.from20to30||0) + '</td>' +
         '<td' + cc(row.from30to40||0,'#e65100') + '>' + (row.from30to40||0) + '</td>' +
-        '<td' + cc(row.from40to60||0,'#f9ab00') + '>' + (row.from40to60||0) + '</td>' +
+        '<td' + cc(row.from40to50||0,'#f9ab00') + '>' + (row.from40to50||0) + '</td>' +
+        '<td' + cc(row.from50to60||0,'#e67c00') + '>' + (row.from50to60||0) + '</td>' +
         '<td' + cc(row.from60to80||0,'#ff8f00') + '>' + (row.from60to80||0) + '</td>' +
         '<td' + cc(row.from80to100||0,'#34a853') + '>' + (row.from80to100||0) + '</td>' +
         '<td' + cc(row.over100||0,'#1a73e8') + '>' + (row.over100||0) + '</td>';
     }
     function bracketFT(t) {
-      return '<td>' + t.u20 + '</td><td>' + t.f20 + '</td><td>' + t.f30 + '</td><td>' + t.f40 + '</td><td>' + t.f60 + '</td><td>' + t.f80 + '</td><td>' + t.o100 + '</td>';
+      return '<td>' + t.u20 + '</td><td>' + t.f20 + '</td><td>' + t.f30 + '</td><td>' + t.f45 + '</td><td>' + t.f50 + '</td><td>' + t.f60 + '</td><td>' + t.f80 + '</td><td>' + t.o100 + '</td>';
     }
 
     // Summary cards
@@ -1389,17 +1390,18 @@ window.renderCollectorsTab = function() {
     html += '<th>HR Code</th><th>Name</th><th>Total</th>' + bracketTH();
     html += '</tr></thead><tbody>';
 
-    var totals = { parts:0, u20:0, f20:0, f30:0, f40:0, f60:0, f80:0, o100:0 };
+    var totals = { parts:0, u20:0, f20:0, f30:0, f45:0, f50:0, f60:0, f80:0, o100:0 };
     d.collectorsOverview.forEach(function(c) {
       totals.parts += c.totalParts;
       totals.u20 += (c.under20||0); totals.f20 += (c.from20to30||0); totals.f30 += (c.from30to40||0);
-      totals.f40 += (c.from40to60||0); totals.f60 += c.from60to80; totals.f80 += c.from80to100; totals.o100 += c.over100;
+      totals.f45 += (c.from40to50||0); totals.f50 += (c.from50to60||0);
+      totals.f60 += c.from60to80; totals.f80 += c.from80to100; totals.o100 += c.over100;
       html += '<tr><td>' + esc(c.hr_code) + '</td><td>' + esc(c.full_name) + '</td><td>' + c.totalParts + '</td>' + bracketTD(c) + '</tr>';
     });
     html += '</tbody></table></div>';
     // Footer as separate table (always visible)
     html += '<table class="stats-table" style="' + ftS + '"><tfoot><tr>';
-    html += '<td colspan="2" style="text-align:left;font-weight:700;">Total</td><td style="font-weight:700;">' + totals.parts + '</td>' + bracketFT(totals);
+    html += '<td colspan="2" style="text-align:left;font-weight:700;color:#1a73e8;">Total</td><td style="font-weight:700;color:#1a73e8;">' + totals.parts + '</td>' + bracketFT(totals);
     html += '</tr></tfoot></table>';
     html += '</div>';
 
@@ -1448,11 +1450,11 @@ window.renderCollectorsTab = function() {
       html += '<table class="stats-table" id="weekly-overview-table" style="' + tblS + '">';
       html += '<thead style="' + hdS + '"><tr><th>Week</th><th>Total</th>' + bracketTH() + '</tr></thead><tbody>';
 
-      var wTotals = { parts:0, u20:0, f20:0, f30:0, f40:0, f60:0, f80:0, o100:0 };
+      var wTotals = { parts:0, u20:0, f20:0, f30:0, f45:0, f50:0, f60:0, f80:0, o100:0 };
       d.weeklyOverview.forEach(function(w) {
         wTotals.parts += w.totalParts; wTotals.u20 += w.under20; wTotals.f20 += w.from20to30;
-        wTotals.f30 += w.from30to40; wTotals.f40 += w.from40to60; wTotals.f60 += w.from60to80;
-        wTotals.f80 += w.from80to100; wTotals.o100 += w.over100;
+        wTotals.f30 += w.from30to40; wTotals.f45 += w.from40to50; wTotals.f50 += w.from50to60;
+        wTotals.f60 += w.from60to80; wTotals.f80 += w.from80to100; wTotals.o100 += w.over100;
         html += '<tr><td>' + esc(w.week) + '</td><td>' + w.totalParts + '</td>' + bracketTD(w) + '</tr>';
       });
       html += '</tbody></table></div>';

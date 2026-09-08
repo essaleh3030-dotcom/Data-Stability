@@ -185,7 +185,8 @@ export default async function handler(req, res) {
           under20: 0,
           from20to30: 0,
           from30to40: 0,
-          from40to60: 0,
+          from40to50: 0,
+          from50to60: 0,
           from60to80: 0,
           from80to100: 0,
           over100: 0,
@@ -200,7 +201,8 @@ export default async function handler(req, res) {
       if (duels < 20) c.under20++;
       else if (duels < 30) c.from20to30++;
       else if (duels < 40) c.from30to40++;
-      else if (duels < 60) c.from40to60++;
+      else if (duels < 50) c.from40to50++;
+      else if (duels < 60) c.from50to60++;
       else if (duels <= 80) c.from60to80++;
       else if (duels <= 100) c.from80to100++;
       else c.over100++;
@@ -223,7 +225,7 @@ export default async function handler(req, res) {
       if (!before) continue;
       const w = assign.week || 'Unknown';
       if (!weekMap[w]) {
-        weekMap[w] = { week: w, totalParts: 0, under20: 0, from20to30: 0, from30to40: 0, from40to60: 0, from60to80: 0, from80to100: 0, over100: 0 };
+        weekMap[w] = { week: w, totalParts: 0, under20: 0, from20to30: 0, from30to40: 0, from40to50: 0, from50to60: 0, from60to80: 0, from80to100: 0, over100: 0 };
       }
       const wk = weekMap[w];
       wk.totalParts++;
@@ -231,7 +233,8 @@ export default async function handler(req, res) {
       if (duels < 20) wk.under20++;
       else if (duels < 30) wk.from20to30++;
       else if (duels < 40) wk.from30to40++;
-      else if (duels < 60) wk.from40to60++;
+      else if (duels < 50) wk.from40to50++;
+      else if (duels < 60) wk.from50to60++;
       else if (duels <= 80) wk.from60to80++;
       else if (duels <= 100) wk.from80to100++;
       else wk.over100++;
