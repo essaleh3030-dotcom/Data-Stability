@@ -1530,11 +1530,11 @@ window.renderCollectorsTab = function() {
       html += '<button class="export-btn" onclick="exportTableCsv(\'review-detail-table\',\'reviewed-parts-detail\')">&#x2913; Export CSV</button>';
       html += '<div style="flex:1;overflow-y:auto;max-height:450px;border:1px solid #e0e0e0;border-radius:8px 8px 0 0;">';
       html += '<table class="stats-table" id="review-detail-table" style="' + tblS + '">';
-      html += '<thead style="' + hdS + '"><tr><th>Match ID</th><th>Part ID</th><th>HR Code</th><th>Name</th><th>Competition</th><th>Before</th><th>After</th><th>Diff</th></tr></thead><tbody>';
+      html += '<thead style="' + hdS + '"><tr><th>Match ID</th><th>Date</th><th>Part ID</th><th>HR Code</th><th>Name</th><th>Competition</th><th>Before</th><th>After</th><th>Diff</th></tr></thead><tbody>';
 
       filteredReviewed.forEach(function(p) {
         var dc = p.diff > 0 ? '#34a853' : (p.diff < 0 ? '#d93025' : '#5f6368');
-        html += '<tr><td>' + esc(p.match_id) + '</td><td>' + esc(p.part_id) + '</td><td>' + esc(p.hr_code) + '</td>';
+        html += '<tr><td>' + esc(p.match_id) + '</td><td>' + esc(p.date || '') + '</td><td>' + esc(p.part_id) + '</td><td>' + esc(p.hr_code) + '</td>';
         html += '<td>' + esc(p.full_name) + '</td><td>' + esc(p.competition) + '</td>';
         html += '<td>' + p.beforeTotal + '</td><td>' + p.afterTotal + '</td>';
         html += '<td style="color:' + dc + ';font-weight:600;">' + (p.diff > 0 ? '+' : '') + p.diff + '</td></tr>';

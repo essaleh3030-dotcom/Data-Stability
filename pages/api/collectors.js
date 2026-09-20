@@ -72,7 +72,18 @@ export default async function handler(req, res) {
       const fullName = String(row[aNameIdx] || '').trim();
       const dateVal = aDateIdx >= 0 ? String(row[aDateIdx] || '').trim() : '';
       if (!mid || !pid || !hrCode) continue;
-      assignments[`${mid}_${pid}`] = { hr_code: hrCode, full_name: fullName, week: weekStart(dateVal) };
+      // Convert raw date for display (serial or string)
+      let displayDate = '';
+      if (dateVal) {
+        if (/^\d+(\.\d+)?$/.test(dateVal)) {
+          const sd = new Date(Date.UTC(1899, 11, 30 + Math.floor(parseFloat(dateVal))));
+          if (!isNaN(sd.getTime())) displayDate = sd.toISOString().slice(0, 10);
+        } else {
+          const pd = new Date(dateVal);
+          if (!isNaN(pd.getTime())) displayDate = pd.toISOString().slice(0, 10);
+        }
+      }
+      assignments[`${mid}_${pid}`] = { hr_code: hrCode, full_name: fullName, week: weekStart(dateVal), date: displayDate };
     }
 
     // 2. Read Before Dashboard to get total_duels per part
@@ -265,6 +276,7 @@ export default async function handler(req, res) {
         full_name: assign.full_name,
         competition: before.competition,
         week: assign.week,
+        date: assign.date,
         beforeTotal,
         afterTotal,
         diff,
