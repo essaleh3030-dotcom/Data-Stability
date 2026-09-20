@@ -651,6 +651,7 @@ function renderAll() {
   if (document.getElementById('panel-comparison').classList.contains('active')) renderComparison();
   if (document.getElementById('panel-cmptable').classList.contains('active')) renderCmpTablePage();
   if (document.getElementById('panel-cmpcomp').classList.contains('active')) renderCmpCompPage();
+  if (document.getElementById('panel-collectors').classList.contains('active')) renderCollectorsTab();
 }
 
 // ── Competition table ────────────────────────────────────────────────────────
@@ -1351,6 +1352,63 @@ window.renderCollectorsTab = function() {
     var hdS = 'position:sticky;top:0;background:#fff;z-index:1;';
     var ftS = 'border-radius:0 0 8px 8px;border:none;box-shadow:none;border-top:none;';
 
+    // Check if week filter is active
+    var wkCount = Object.keys(selWeeks).length;
+    var wkTotal = document.querySelectorAll('#weekMSPanel input').length;
+    var weekFilterActive = wkCount > 0 && wkCount < wkTotal;
+
+    // Helper: does a week pass the filter?
+    function weekOk(w) {
+      if (!weekFilterActive) return true;
+      return !!selWeeks[w];
+    }
+
+    // Bracket classifier
+    function classifyDuels(duels) {
+      if (duels < 20) return 'under20';
+      if (duels < 30) return 'from20to30';
+      if (duels < 40) return 'from30to40';
+      if (duels < 50) return 'from40to50';
+      if (duels < 60) return 'from50to60';
+      if (duels <= 80) return 'from60to80';
+      if (duels <= 100) return 'from80to100';
+      return 'over100';
+    }
+
+    // Recompute collectors overview from raw parts, respecting week filter
+    var filteredOverview = [];
+    d.collectorsOverview.forEach(function(c) {
+      var fc = { hr_code: c.hr_code, full_name: c.full_name, totalParts: 0,
+        under20:0, from20to30:0, from30to40:0, from40to50:0, from50to60:0,
+        from60to80:0, from80to100:0, over100:0 };
+      (c.parts || []).forEach(function(p) {
+        if (!weekOk(p.week)) return;
+        fc.totalParts++;
+        fc[classifyDuels(p.total_duels)]++;
+      });
+      if (fc.totalParts > 0) filteredOverview.push(fc);
+    });
+    filteredOverview.sort(function(a,b) { return b.totalParts - a.totalParts; });
+
+    // Filter weekly overview
+    var filteredWeekly = (d.weeklyOverview || []).filter(function(w) { return weekOk(w.week); });
+
+    // Filter reviewed parts
+    var filteredReviewed = d.reviewedParts.filter(function(p) { return weekOk(p.week); });
+
+    // Recompute review collector summary from filtered parts
+    var rcMap = {};
+    filteredReviewed.forEach(function(p) {
+      if (!rcMap[p.hr_code]) rcMap[p.hr_code] = { hr_code: p.hr_code, full_name: p.full_name, reviewedParts: 0, totalDuelsAdded: 0 };
+      rcMap[p.hr_code].reviewedParts++;
+      rcMap[p.hr_code].totalDuelsAdded += p.diff;
+    });
+    var filteredReviewSummary = Object.values(rcMap).map(function(c) {
+      return { hr_code: c.hr_code, full_name: c.full_name, reviewedParts: c.reviewedParts,
+        totalDuelsAdded: c.totalDuelsAdded,
+        avgDuelsAdded: c.reviewedParts > 0 ? Math.round(c.totalDuelsAdded / c.reviewedParts * 10) / 10 : 0 };
+    }).sort(function(a,b) { return b.reviewedParts - a.reviewedParts; });
+
     function cc(v, clr) { return v > 0 ? ' style="color:'+clr+';font-weight:600;"' : ''; }
     function bracketTH() {
       return '<th>&lt;20</th><th>20-30</th><th>30-40</th><th>40-50</th><th>50-60</th><th>60-80</th><th>80-100</th><th>100+</th>';
@@ -1369,12 +1427,13 @@ window.renderCollectorsTab = function() {
       return '<td>' + t.u20 + '</td><td>' + t.f20 + '</td><td>' + t.f30 + '</td><td>' + t.f45 + '</td><td>' + t.f50 + '</td><td>' + t.f60 + '</td><td>' + t.f80 + '</td><td>' + t.o100 + '</td>';
     }
 
-    // Summary cards
+    // Summary cards (use filtered counts)
+    var fMatchedParts = filteredOverview.reduce(function(s,c){return s+c.totalParts;},0);
     html += '<div class="summary">';
-    html += '<div class="stat-card"><div class="val">' + d.totalMatchedParts + '</div><div class="lbl">Assigned Parts (matched)</div></div>';
-    html += '<div class="stat-card"><div class="val">' + d.collectorsOverview.length + '</div><div class="lbl">Collectors</div></div>';
-    html += '<div class="stat-card"><div class="val">' + d.totalReviewedParts + '</div><div class="lbl">Reviewed Parts</div></div>';
-    html += '<div class="stat-card"><div class="val">' + d.reviewCollectorSummary.length + '</div><div class="lbl">Collectors Reviewed</div></div>';
+    html += '<div class="stat-card"><div class="val">' + fMatchedParts + '</div><div class="lbl">Assigned Parts (matched)</div></div>';
+    html += '<div class="stat-card"><div class="val">' + filteredOverview.length + '</div><div class="lbl">Collectors</div></div>';
+    html += '<div class="stat-card"><div class="val">' + filteredReviewed.length + '</div><div class="lbl">Reviewed Parts</div></div>';
+    html += '<div class="stat-card"><div class="val">' + filteredReviewSummary.length + '</div><div class="lbl">Collectors Reviewed</div></div>';
     html += '</div>';
 
     // ═══ ROW 1: Collector Overview + Review Summary ═══
@@ -1391,11 +1450,11 @@ window.renderCollectorsTab = function() {
     html += '</tr></thead><tbody>';
 
     var totals = { parts:0, u20:0, f20:0, f30:0, f45:0, f50:0, f60:0, f80:0, o100:0 };
-    d.collectorsOverview.forEach(function(c) {
+    filteredOverview.forEach(function(c) {
       totals.parts += c.totalParts;
       totals.u20 += (c.under20||0); totals.f20 += (c.from20to30||0); totals.f30 += (c.from30to40||0);
       totals.f45 += (c.from40to50||0); totals.f50 += (c.from50to60||0);
-      totals.f60 += c.from60to80; totals.f80 += c.from80to100; totals.o100 += c.over100;
+      totals.f60 += (c.from60to80||0); totals.f80 += (c.from80to100||0); totals.o100 += (c.over100||0);
       html += '<tr><td>' + esc(c.hr_code) + '</td><td>' + esc(c.full_name) + '</td><td>' + c.totalParts + '</td>' + bracketTD(c) + '</tr>';
     });
     html += '</tbody></table></div>';
@@ -1408,7 +1467,7 @@ window.renderCollectorsTab = function() {
     // ── 1B: Review Summary ──
     html += '<div style="flex:1;min-width:380px;display:flex;flex-direction:column;">';
     html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:0 0 8px;">Reviewed Duels Added (Before vs Current)</h2>';
-    if (d.reviewCollectorSummary.length === 0) {
+    if (filteredReviewSummary.length === 0) {
       html += '<p style="color:#5f6368;font-size:13px;">No reviewed parts found.</p>';
     } else {
       html += '<button class="export-btn" onclick="exportTableCsv(\'review-summary-table\',\'reviewed-collector-summary\')">&#x2913; Export CSV</button>';
@@ -1417,7 +1476,7 @@ window.renderCollectorsTab = function() {
       html += '<thead style="' + hdS + '"><tr><th>HR Code</th><th>Name</th><th>Reviewed Parts</th><th>Total Added</th><th>Avg / Part</th></tr></thead><tbody>';
 
       var rTotals = { parts: 0, duels: 0 };
-      d.reviewCollectorSummary.forEach(function(c) {
+      filteredReviewSummary.forEach(function(c) {
         rTotals.parts += c.reviewedParts;
         rTotals.duels += c.totalDuelsAdded;
         var dc = c.totalDuelsAdded > 0 ? '#34a853' : (c.totalDuelsAdded < 0 ? '#d93025' : '#5f6368');
@@ -1442,7 +1501,7 @@ window.renderCollectorsTab = function() {
     html += '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;margin-top:24px;">';
 
     // ── 2A: Weekly Breakdown ──
-    if (d.weeklyOverview && d.weeklyOverview.length > 0) {
+    if (filteredWeekly.length > 0) {
       html += '<div style="flex:1;min-width:520px;display:flex;flex-direction:column;">';
       html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:0 0 8px;">Weekly Breakdown (Before Data)</h2>';
       html += '<button class="export-btn" onclick="exportTableCsv(\'weekly-overview-table\',\'weekly-overview\')">&#x2913; Export CSV</button>';
@@ -1451,7 +1510,7 @@ window.renderCollectorsTab = function() {
       html += '<thead style="' + hdS + '"><tr><th>Week</th><th>Total</th>' + bracketTH() + '</tr></thead><tbody>';
 
       var wTotals = { parts:0, u20:0, f20:0, f30:0, f45:0, f50:0, f60:0, f80:0, o100:0 };
-      d.weeklyOverview.forEach(function(w) {
+      filteredWeekly.forEach(function(w) {
         wTotals.parts += w.totalParts; wTotals.u20 += w.under20; wTotals.f20 += w.from20to30;
         wTotals.f30 += w.from30to40; wTotals.f45 += w.from40to50; wTotals.f50 += w.from50to60;
         wTotals.f60 += w.from60to80; wTotals.f80 += w.from80to100; wTotals.o100 += w.over100;
@@ -1465,7 +1524,7 @@ window.renderCollectorsTab = function() {
     }
 
     // ── 2B: Per-Part Detail ──
-    if (d.reviewCollectorSummary.length > 0) {
+    if (filteredReviewed.length > 0) {
       html += '<div style="flex:1;min-width:500px;display:flex;flex-direction:column;">';
       html += '<h2 style="font-size:15px;font-weight:600;color:#202124;margin:0 0 8px;">Per-Part Detail</h2>';
       html += '<button class="export-btn" onclick="exportTableCsv(\'review-detail-table\',\'reviewed-parts-detail\')">&#x2913; Export CSV</button>';
@@ -1473,7 +1532,7 @@ window.renderCollectorsTab = function() {
       html += '<table class="stats-table" id="review-detail-table" style="' + tblS + '">';
       html += '<thead style="' + hdS + '"><tr><th>Match ID</th><th>Part ID</th><th>HR Code</th><th>Name</th><th>Competition</th><th>Before</th><th>After</th><th>Diff</th></tr></thead><tbody>';
 
-      d.reviewedParts.forEach(function(p) {
+      filteredReviewed.forEach(function(p) {
         var dc = p.diff > 0 ? '#34a853' : (p.diff < 0 ? '#d93025' : '#5f6368');
         html += '<tr><td>' + esc(p.match_id) + '</td><td>' + esc(p.part_id) + '</td><td>' + esc(p.hr_code) + '</td>';
         html += '<td>' + esc(p.full_name) + '</td><td>' + esc(p.competition) + '</td>';

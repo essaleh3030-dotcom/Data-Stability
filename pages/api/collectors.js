@@ -212,6 +212,7 @@ export default async function handler(req, res) {
         part_id: key.split('_')[1],
         total_duels: duels,
         competition: before.competition,
+        week: assign.week,
       });
     }
 
@@ -263,6 +264,7 @@ export default async function handler(req, res) {
         hr_code: assign.hr_code,
         full_name: assign.full_name,
         competition: before.competition,
+        week: assign.week,
         beforeTotal,
         afterTotal,
         diff,
