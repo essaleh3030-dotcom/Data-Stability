@@ -35,6 +35,7 @@ export default async function handler(req, res) {
     const aNameIdx = aHeaders.indexOf('full_name');
     const aHrIdx = aHeaders.indexOf('hr_code');
     const aDateIdx = aHeaders.indexOf('tornado_first_completion');
+    const aDateFallbackIdx = aHeaders.indexOf('assignment_date');
 
     if (aMatchIdx < 0 || aPartIdx < 0 || aNameIdx < 0 || aHrIdx < 0) {
       return res.status(400).json({
@@ -70,7 +71,8 @@ export default async function handler(req, res) {
       const pid = String(row[aPartIdx] || '').trim();
       const hrCode = String(row[aHrIdx] || '').trim();
       const fullName = String(row[aNameIdx] || '').trim();
-      const dateVal = aDateIdx >= 0 ? String(row[aDateIdx] || '').trim() : '';
+      let dateVal = aDateIdx >= 0 ? String(row[aDateIdx] || '').trim() : '';
+      if (!dateVal && aDateFallbackIdx >= 0) dateVal = String(row[aDateFallbackIdx] || '').trim();
       if (!mid || !pid || !hrCode) continue;
       // Convert raw date for display (serial or string)
       let displayDate = '';
