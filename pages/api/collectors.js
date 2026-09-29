@@ -45,9 +45,15 @@ export default async function handler(req, res) {
       return d.toISOString().slice(0, 10);
     }
 
-    // 1. Read assignments sheet
-    const assignVals = await getSheetValues(ASSIGN_ID, '');
+    // 1. Fetch ALL sheets in parallel
+    const [assignVals, bDashName, revVals] = await Promise.all([
+      getSheetValues(ASSIGN_ID, ''),
+      findDashboardSheet(BEFORE_ID),
+      getSheetValues(BEFORE_ID, 'Reviewed Matches').catch(() => []),
+    ]);
+
     if (!assignVals.length) return res.status(404).json({ error: 'Assignments sheet is empty' });
+    if (!bDashName) return res.status(500).json({ error: 'Dashboard not found in Before spreadsheet' });
 
     const aHeaders = assignVals[0].map(norm);
     const aMatchIdx = aHeaders.indexOf('matchid');
@@ -74,7 +80,6 @@ export default async function handler(req, res) {
       let dateVal = aDateIdx >= 0 ? String(row[aDateIdx] || '').trim() : '';
       if (!dateVal && aDateFallbackIdx >= 0) dateVal = String(row[aDateFallbackIdx] || '').trim();
       if (!mid || !pid || !hrCode) continue;
-      // Convert raw date for display (serial or string)
       let displayDate = '';
       if (dateVal) {
         if (/^\d+(\.\d+)?$/.test(dateVal)) {
@@ -88,9 +93,7 @@ export default async function handler(req, res) {
       assignments[`${mid}_${pid}`] = { hr_code: hrCode, full_name: fullName, week: weekStart(dateVal), date: displayDate };
     }
 
-    // 2. Read Before Dashboard to get total_duels per part
-    const bDashName = await findDashboardSheet(BEFORE_ID);
-    if (!bDashName) return res.status(500).json({ error: 'Dashboard not found in Before spreadsheet' });
+    // 2. Read Before Dashboard (bDashName already resolved above)
     const bVals = await getSheetValues(BEFORE_ID, bDashName);
     const bHeaders = bVals[0].map(norm);
 
@@ -99,7 +102,6 @@ export default async function handler(req, res) {
     const bTotalIdx = bHeaders.indexOf('total_duels');
     const bCompIdx = bHeaders.indexOf('competition');
 
-    // Before data lookup: key = matchId_partId -> { total_duels, competition }
     const beforeData = {};
     for (let i = 1; i < bVals.length; i++) {
       const mid = String(bVals[i][bMidIdx] || '').trim();
@@ -109,14 +111,6 @@ export default async function handler(req, res) {
         total: bTotalIdx >= 0 ? (Number(bVals[i][bTotalIdx]) || 0) : 0,
         competition: bCompIdx >= 0 ? String(bVals[i][bCompIdx] || '').trim() : '',
       };
-    }
-
-    // 3. Read Reviewed Matches from Before spreadsheet
-    let revVals;
-    try {
-      revVals = await getSheetValues(BEFORE_ID, 'Reviewed Matches');
-    } catch (e) {
-      revVals = [];
     }
 
     const reviewedKeys = {};
@@ -147,10 +141,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4. Read After/Current Dashboard for reviewed parts
+    // 4. Read After/Current Dashboard for reviewed parts (parallel fetch)
     let afterData = {};
     if (Object.keys(reviewedKeys).length > 0) {
-      const aDashName = await findDashboardSheet(AFTER_ID);
+      const [aDashName] = await Promise.all([findDashboardSheet(AFTER_ID)]);
       if (aDashName) {
         const aVals = await getSheetValues(AFTER_ID, aDashName);
         const aHdrs = aVals[0].map(norm);

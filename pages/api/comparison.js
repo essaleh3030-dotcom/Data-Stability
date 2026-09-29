@@ -44,13 +44,12 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'BEFORE_SHEET_ID / AFTER_SHEET_ID not configured' });
     }
 
-    // 1. Read "Reviewed Matches" from Before spreadsheet
-    let revVals;
-    try {
-      revVals = await getSheetValues(BEFORE_ID, 'Reviewed Matches');
-    } catch (e) {
-      return res.status(500).json({ error: 'Cannot read Reviewed Matches: ' + e.message });
-    }
+    // 1. Fetch ALL sheets in parallel (5 calls → 1 round trip)
+    const [revVals, bDashName, aDashName] = await Promise.all([
+      getSheetValues(BEFORE_ID, 'Reviewed Matches').catch((e) => { throw new Error('Cannot read Reviewed Matches: ' + e.message); }),
+      findDashboardSheet(BEFORE_ID),
+      findDashboardSheet(AFTER_ID),
+    ]);
 
     // Find header row
     let revHeaders = revVals[0]?.map(norm) || [];
@@ -86,10 +85,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ error: 'No reviewed matches found (Data Updated = Yes).' });
     }
 
-    // 2. Read Before Dashboard
-    const bDashName = await findDashboardSheet(BEFORE_ID);
+    // 2. Read Before + After Dashboard in parallel
     if (!bDashName) return res.status(500).json({ error: 'Dashboard not found in Before spreadsheet.' });
-    const bVals = await getSheetValues(BEFORE_ID, bDashName);
+    if (!aDashName) return res.status(500).json({ error: 'Dashboard not found in After spreadsheet.' });
+
+    const [bVals, aVals] = await Promise.all([
+      getSheetValues(BEFORE_ID, bDashName),
+      getSheetValues(AFTER_ID, aDashName),
+    ]);
+
     const bHeaders = bVals[0].map(norm);
 
     const bMidIdx = bHeaders.indexOf('match_id');
@@ -99,11 +103,6 @@ export default async function handler(req, res) {
     const bCompIdx = bHeaders.indexOf('competition');
     const bEventIdxs = {};
     EVENT_COLS.forEach((e) => { bEventIdxs[e] = bHeaders.indexOf(norm(e)); });
-
-    // 3. Read After Dashboard — find second column set
-    const aDashName = await findDashboardSheet(AFTER_ID);
-    if (!aDashName) return res.status(500).json({ error: 'Dashboard not found in After spreadsheet.' });
-    const aVals = await getSheetValues(AFTER_ID, aDashName);
     const aHeaders = aVals[0].map(norm);
 
     let aMidIdx2 = -1, aPidIdx2 = -1, aDateIdx2 = -1, aTotalIdx2 = -1;
