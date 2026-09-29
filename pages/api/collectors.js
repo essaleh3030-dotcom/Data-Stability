@@ -186,9 +186,14 @@ export default async function handler(req, res) {
     // For each assigned part, get before total_duels and classify into brackets
     const collectorMap = {}; // hr_code -> { full_name, parts: [...], brackets }
 
+    // Diagnostic: track unmatched assignments
+    const unmatchedKeys = [];
     for (const [key, assign] of Object.entries(assignments)) {
       const before = beforeData[key];
-      if (!before) continue; // part not in Before dashboard, skip
+      if (!before) {
+        if (unmatchedKeys.length < 20) unmatchedKeys.push(key);
+        continue;
+      }
 
       if (!collectorMap[assign.hr_code]) {
         collectorMap[assign.hr_code] = {
@@ -307,6 +312,10 @@ export default async function handler(req, res) {
       }))
       .sort((a, b) => b.reviewedParts - a.reviewedParts);
 
+    // Sample keys for debugging
+    const sampleAssignKeys = Object.keys(assignments).slice(0, 5);
+    const sampleBeforeKeys = Object.keys(beforeData).slice(0, 5);
+
     const result = {
       collectorsOverview,
       weeklyOverview,
@@ -318,6 +327,22 @@ export default async function handler(req, res) {
       totalAssignedParts: Object.keys(assignments).length,
       totalMatchedParts: collectorsOverview.reduce((s, c) => s + c.totalParts, 0),
       totalReviewedParts: reviewedParts.length,
+      _debug: {
+        assignmentRows: Object.keys(assignments).length,
+        beforeDataRows: Object.keys(beforeData).length,
+        unmatchedCount: unmatchedKeys.length >= 20 ? '20+' : unmatchedKeys.length,
+        sampleUnmatched: unmatchedKeys.slice(0, 10),
+        sampleAssignKeys,
+        sampleBeforeKeys,
+        beforeSheetName: bDashName,
+        beforeHeaders: bHeaders.join(', '),
+        bMidIdx,
+        bPidIdx,
+        bTotalIdx,
+        assignHeaders: aHeaders.join(', '),
+        aMatchIdx,
+        aPartIdx,
+      },
     };
 
     _cache = result;
