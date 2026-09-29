@@ -1,5 +1,5 @@
 // pages/api/collectors.js — collector parts overview + reviewed duels added
-import { getSheetValues, findDashboardSheet } from '../../lib/sheets';
+import { getSheetValues } from '../../lib/sheets';
 
 let _cache = null;
 let _cacheTime = 0;
@@ -22,11 +22,10 @@ export default async function handler(req, res) {
     const ASSIGN_ID = process.env.ASSIGNMENTS_SHEET_ID;
 
     if (!BEFORE_ID || !AFTER_ID || !ASSIGN_ID) {
-      return res.status(500).json({ error: 'Missing env vars: BEFORE_SHEET_ID, AFTER_SHEET_ID, or ASSIGNMENTS_SHEET_ID' });
+      return res.status(500).json({ error: 'Missing env vars' });
     }
 
-    // Sunday-based week start helper
-    // Google Sheets dates can be serial numbers (days since 1899-12-30) or date strings
+    // Sunday-based week start helper (handles Google Sheets serial dates)
     function weekStart(dateStr) {
       let d;
       const raw = String(dateStr || '').trim();
@@ -39,21 +38,23 @@ export default async function handler(req, res) {
         d = new Date(raw);
       }
       if (isNaN(d.getTime())) return null;
-      const day = d.getUTCDay(); // 0=Sun
+      const day = d.getUTCDay();
       d.setUTCDate(d.getUTCDate() - day);
       return d.toISOString().slice(0, 10);
     }
 
-    // 1. Parallel fetch: assignments + Before Dashboard name + Reviewed Matches
-    const bDashNameP = findDashboardSheet(BEFORE_ID);
-    const assignValsP = getSheetValues(ASSIGN_ID, '');
-    const revValsP = getSheetValues(BEFORE_ID, 'Reviewed Matches').catch(() => []);
-
-    const [bDashName, assignVals, revValsRaw] = await Promise.all([bDashNameP, assignValsP, revValsP]);
+    // *** ALL 4 sheets fetched in parallel — must finish within 10s ***
+    const [assignVals, bVals, revVals, aVals] = await Promise.all([
+      getSheetValues(ASSIGN_ID, ''),
+      getSheetValues(BEFORE_ID, 'Dashboard'),
+      getSheetValues(BEFORE_ID, 'Reviewed Matches').catch(() => []),
+      getSheetValues(AFTER_ID, 'Dashboard').catch(() => []),
+    ]);
 
     if (!assignVals.length) return res.status(404).json({ error: 'Assignments sheet is empty' });
-    if (!bDashName) return res.status(500).json({ error: 'Dashboard not found in Before spreadsheet' });
+    if (!bVals.length) return res.status(500).json({ error: 'Before Dashboard sheet is empty' });
 
+    // --- Parse Assignments ---
     const aHeaders = assignVals[0].map(norm);
     const aMatchIdx = aHeaders.indexOf('matchid');
     const aPartIdx = aHeaders.indexOf('partid');
@@ -64,11 +65,10 @@ export default async function handler(req, res) {
 
     if (aMatchIdx < 0 || aPartIdx < 0 || aNameIdx < 0 || aHrIdx < 0) {
       return res.status(400).json({
-        error: `Assignments sheet missing required columns. Found: ${aHeaders.join(', ')}`,
+        error: `Assignments missing columns. Found: ${aHeaders.join(', ')}`,
       });
     }
 
-    // Build assignments lookup: key = matchId_partId -> { hr_code, full_name, week }
     const assignments = {};
     for (let i = 1; i < assignVals.length; i++) {
       const row = assignVals[i];
@@ -92,16 +92,13 @@ export default async function handler(req, res) {
       assignments[`${mid}_${pid}`] = { hr_code: hrCode, full_name: fullName, week: weekStart(dateVal), date: displayDate };
     }
 
-    // 2. Read Before Dashboard to get total_duels per part
-    const bVals = await getSheetValues(BEFORE_ID, bDashName);
+    // --- Parse Before Dashboard ---
     const bHeaders = bVals[0].map(norm);
-
     const bMidIdx = bHeaders.indexOf('match_id');
     const bPidIdx = bHeaders.indexOf('part_id');
     const bTotalIdx = bHeaders.indexOf('total_duels');
     const bCompIdx = bHeaders.indexOf('competition');
 
-    // Before data lookup: key = matchId_partId -> { total_duels, competition }
     const beforeData = {};
     for (let i = 1; i < bVals.length; i++) {
       const mid = String(bVals[i][bMidIdx] || '').trim();
@@ -113,9 +110,7 @@ export default async function handler(req, res) {
       };
     }
 
-    // 3. Reviewed Matches (already fetched in parallel above)
-    let revVals = revValsRaw || [];
-
+    // --- Parse Reviewed Matches ---
     const reviewedKeys = {};
     if (revVals.length) {
       let revHeaders = revVals[0].map(norm);
@@ -144,46 +139,37 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4. Read After/Current Dashboard for reviewed parts
+    // --- Parse After Dashboard (already fetched in parallel) ---
     let afterData = {};
-    if (Object.keys(reviewedKeys).length > 0) {
-      const aDashName = await findDashboardSheet(AFTER_ID);
-      if (aDashName) {
-        const aVals = await getSheetValues(AFTER_ID, aDashName);
-        const aHdrs = aVals[0].map(norm);
-
-        // Find the second column set (after columns R onward)
-        let aMidIdx2 = -1, aPidIdx2 = -1, aTotalIdx2 = -1;
-        const firstTotalIdx = aHdrs.indexOf('total_duels');
-        for (let i = (firstTotalIdx >= 0 ? firstTotalIdx + 1 : 0); i < aHdrs.length; i++) {
-          if (aHdrs[i] === 'match_id' && aMidIdx2 < 0) aMidIdx2 = i;
+    if (aVals.length && Object.keys(reviewedKeys).length > 0) {
+      const aHdrs = aVals[0].map(norm);
+      // Find the second column set (after columns R onward)
+      let aMidIdx2 = -1, aPidIdx2 = -1, aTotalIdx2 = -1;
+      const firstTotalIdx = aHdrs.indexOf('total_duels');
+      for (let i = (firstTotalIdx >= 0 ? firstTotalIdx + 1 : 0); i < aHdrs.length; i++) {
+        if (aHdrs[i] === 'match_id' && aMidIdx2 < 0) aMidIdx2 = i;
+      }
+      if (aMidIdx2 >= 0) {
+        for (let i = aMidIdx2; i < aHdrs.length; i++) {
+          if (aHdrs[i] === 'part_id' && aPidIdx2 < 0) aPidIdx2 = i;
+          if (aHdrs[i] === 'total_duels' && aTotalIdx2 < 0) aTotalIdx2 = i;
         }
-        if (aMidIdx2 >= 0) {
-          for (let i = aMidIdx2; i < aHdrs.length; i++) {
-            if (aHdrs[i] === 'part_id' && aPidIdx2 < 0) aPidIdx2 = i;
-            if (aHdrs[i] === 'total_duels' && aTotalIdx2 < 0) aTotalIdx2 = i;
-          }
-        }
-
-        if (aMidIdx2 >= 0) {
-          for (let i = 1; i < aVals.length; i++) {
-            const mid = String(aVals[i][aMidIdx2] || '').trim();
-            const pid = String(aVals[i][aPidIdx2] || '').trim();
-            const key = `${mid}_${pid}`;
-            if (!reviewedKeys[key]) continue;
-            afterData[key] = {
-              total: aTotalIdx2 >= 0 ? (Number(aVals[i][aTotalIdx2]) || 0) : 0,
-            };
-          }
+      }
+      if (aMidIdx2 >= 0) {
+        for (let i = 1; i < aVals.length; i++) {
+          const mid = String(aVals[i][aMidIdx2] || '').trim();
+          const pid = String(aVals[i][aPidIdx2] || '').trim();
+          const key = `${mid}_${pid}`;
+          if (!reviewedKeys[key]) continue;
+          afterData[key] = {
+            total: aTotalIdx2 >= 0 ? (Number(aVals[i][aTotalIdx2]) || 0) : 0,
+          };
         }
       }
     }
 
-    // 5. Build View 1: Collector Parts Overview (Before data only)
-    // For each assigned part, get before total_duels and classify into brackets
-    const collectorMap = {}; // hr_code -> { full_name, parts: [...], brackets }
-
-    // Diagnostic: track unmatched assignments
+    // --- Build Collector Parts Overview ---
+    const collectorMap = {};
     const unmatchedKeys = [];
     for (const [key, assign] of Object.entries(assignments)) {
       const before = beforeData[key];
@@ -197,21 +183,14 @@ export default async function handler(req, res) {
           hr_code: assign.hr_code,
           full_name: assign.full_name,
           totalParts: 0,
-          under20: 0,
-          from20to30: 0,
-          from30to40: 0,
-          from40to50: 0,
-          from50to60: 0,
-          from60to80: 0,
-          from80to100: 0,
-          over100: 0,
+          under20: 0, from20to30: 0, from30to40: 0, from40to50: 0,
+          from50to60: 0, from60to80: 0, from80to100: 0, over100: 0,
           parts: [],
         };
       }
 
       const c = collectorMap[assign.hr_code];
       c.totalParts++;
-
       const duels = before.total;
       if (duels < 20) c.under20++;
       else if (duels < 30) c.from20to30++;
@@ -234,8 +213,8 @@ export default async function handler(req, res) {
     const collectorsOverview = Object.values(collectorMap)
       .sort((a, b) => b.totalParts - a.totalParts);
 
-    // 5b. Build weekly overview — brackets grouped by assignment week
-    const weekMap = {}; // weekStart -> { week, totalParts, under20, ... }
+    // --- Weekly Overview ---
+    const weekMap = {};
     for (const [key, assign] of Object.entries(assignments)) {
       const before = beforeData[key];
       if (!before) continue;
@@ -258,13 +237,13 @@ export default async function handler(req, res) {
     const weeklyOverview = Object.values(weekMap)
       .sort((a, b) => (a.week < b.week ? -1 : a.week > b.week ? 1 : 0));
 
-    // 6. Build View 2: Reviewed Duels Added (Before vs Current)
+    // --- Reviewed Duels Added (Before vs After) ---
     const reviewedParts = [];
-    const reviewCollectorMap = {}; // hr_code -> { full_name, reviewedParts, totalDuelsAdded, partCount }
+    const reviewCollectorMap = {};
 
     for (const key of Object.keys(reviewedKeys)) {
       const assign = assignments[key];
-      if (!assign) continue; // reviewed part not in assignments
+      if (!assign) continue;
       const before = beforeData[key];
       const after = afterData[key];
       if (!before) continue;
@@ -299,7 +278,6 @@ export default async function handler(req, res) {
       rc.totalDuelsAdded += diff;
     }
 
-    // Compute average duels added per part
     const reviewCollectorSummary = Object.values(reviewCollectorMap)
       .map((c) => ({
         ...c,
@@ -309,7 +287,7 @@ export default async function handler(req, res) {
       }))
       .sort((a, b) => b.reviewedParts - a.reviewedParts);
 
-    // Sample keys for debugging
+    // Debug info
     const sampleAssignKeys = Object.keys(assignments).slice(0, 5);
     const sampleBeforeKeys = Object.keys(beforeData).slice(0, 5);
 
@@ -331,7 +309,6 @@ export default async function handler(req, res) {
         sampleUnmatched: unmatchedKeys.slice(0, 10),
         sampleAssignKeys,
         sampleBeforeKeys,
-        beforeSheetName: bDashName,
         beforeHeaders: bHeaders.join(', '),
         bMidIdx,
         bPidIdx,
