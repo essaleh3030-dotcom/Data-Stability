@@ -25,9 +25,34 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Missing env vars: BEFORE_SHEET_ID, AFTER_SHEET_ID, or ASSIGNMENTS_SHEET_ID' });
     }
 
-    // 1. Read assignments sheet
-    const assignVals = await getSheetValues(ASSIGN_ID, '');
+    // Sunday-based week start helper
+    // Google Sheets dates can be serial numbers (days since 1899-12-30) or date strings
+    function weekStart(dateStr) {
+      let d;
+      const raw = String(dateStr || '').trim();
+      if (!raw) return null;
+      if (/^\d+(\.\d+)?$/.test(raw)) {
+        const serial = parseFloat(raw);
+        if (serial < 1) return null;
+        d = new Date(Date.UTC(1899, 11, 30 + Math.floor(serial)));
+      } else {
+        d = new Date(raw);
+      }
+      if (isNaN(d.getTime())) return null;
+      const day = d.getUTCDay(); // 0=Sun
+      d.setUTCDate(d.getUTCDate() - day);
+      return d.toISOString().slice(0, 10);
+    }
+
+    // 1. Parallel fetch: assignments + Before Dashboard name + Reviewed Matches
+    const bDashNameP = findDashboardSheet(BEFORE_ID);
+    const assignValsP = getSheetValues(ASSIGN_ID, '');
+    const revValsP = getSheetValues(BEFORE_ID, 'Reviewed Matches').catch(() => []);
+
+    const [bDashName, assignVals, revValsRaw] = await Promise.all([bDashNameP, assignValsP, revValsP]);
+
     if (!assignVals.length) return res.status(404).json({ error: 'Assignments sheet is empty' });
+    if (!bDashName) return res.status(500).json({ error: 'Dashboard not found in Before spreadsheet' });
 
     const aHeaders = assignVals[0].map(norm);
     const aMatchIdx = aHeaders.indexOf('matchid');
@@ -43,26 +68,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Sunday-based week start helper
-    // Google Sheets dates can be serial numbers (days since 1899-12-30) or date strings
-    function weekStart(dateStr) {
-      let d;
-      const raw = String(dateStr || '').trim();
-      if (!raw) return null;
-      if (/^\d+(\.\d+)?$/.test(raw)) {
-        // Google Sheets serial date number
-        const serial = parseFloat(raw);
-        if (serial < 1) return null;
-        d = new Date(Date.UTC(1899, 11, 30 + Math.floor(serial)));
-      } else {
-        d = new Date(raw);
-      }
-      if (isNaN(d.getTime())) return null;
-      const day = d.getUTCDay(); // 0=Sun
-      d.setUTCDate(d.getUTCDate() - day);
-      return d.toISOString().slice(0, 10);
-    }
-
     // Build assignments lookup: key = matchId_partId -> { hr_code, full_name, week }
     const assignments = {};
     for (let i = 1; i < assignVals.length; i++) {
@@ -74,7 +79,6 @@ export default async function handler(req, res) {
       let dateVal = aDateIdx >= 0 ? String(row[aDateIdx] || '').trim() : '';
       if (!dateVal && aDateFallbackIdx >= 0) dateVal = String(row[aDateFallbackIdx] || '').trim();
       if (!mid || !pid || !hrCode) continue;
-      // Convert raw date for display (serial or string)
       let displayDate = '';
       if (dateVal) {
         if (/^\d+(\.\d+)?$/.test(dateVal)) {
@@ -89,8 +93,6 @@ export default async function handler(req, res) {
     }
 
     // 2. Read Before Dashboard to get total_duels per part
-    const bDashName = await findDashboardSheet(BEFORE_ID);
-    if (!bDashName) return res.status(500).json({ error: 'Dashboard not found in Before spreadsheet' });
     const bVals = await getSheetValues(BEFORE_ID, bDashName);
     const bHeaders = bVals[0].map(norm);
 
@@ -111,13 +113,8 @@ export default async function handler(req, res) {
       };
     }
 
-    // 3. Read Reviewed Matches from Before spreadsheet
-    let revVals;
-    try {
-      revVals = await getSheetValues(BEFORE_ID, 'Reviewed Matches');
-    } catch (e) {
-      revVals = [];
-    }
+    // 3. Reviewed Matches (already fetched in parallel above)
+    let revVals = revValsRaw || [];
 
     const reviewedKeys = {};
     if (revVals.length) {

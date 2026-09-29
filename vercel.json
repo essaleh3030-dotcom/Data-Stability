@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "pages/api/collectors.js": {
+      "maxDuration": 60
+    },
+    "pages/api/*.js": {
+      "maxDuration": 30
+    }
+  }
+}
