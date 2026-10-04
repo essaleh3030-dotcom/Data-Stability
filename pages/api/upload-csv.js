@@ -179,11 +179,14 @@ export default async function handler(req, res) {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    // Current tables → OVERWRITE on duplicate; everything else → SKIP
+    const overwriteOnConflict = tableName === 'Base | Current' || tableName === 'Extra | Current';
+
     const { error, count } = await supabase
       .from(tableName)
       .upsert(deduped, {
         onConflict: schema.conflictCols.join(','),
-        ignoreDuplicates: true,
+        ignoreDuplicates: !overwriteOnConflict,
         count: 'exact',
       });
 
