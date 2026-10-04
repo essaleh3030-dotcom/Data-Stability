@@ -1323,6 +1323,18 @@ function showError(msg) {
   var el = document.getElementById('error-box');
   el.style.display = 'block';
   el.textContent = '⚠  ' + msg;
+  // Still show the app so the Upload tab is accessible even when data loading fails
+  var app = document.getElementById('app');
+  if (app) {
+    app.style.display = '';
+    // Hide all data-dependent tabs; keep Upload visible
+    document.querySelectorAll('.tabs .tab').forEach(function(t) {
+      var v = t.getAttribute('data-view');
+      if (v !== 'upload') t.style.display = 'none';
+    });
+    // Auto-switch to Upload tab
+    if (window.switchView) window.switchView('upload');
+  }
 }
 
 // ── Collectors Tab ──────────────────────────────────────────────────────────
