@@ -26,8 +26,8 @@ const EXTRA_SCHEMA = {
   conflictCols: ['event_match_id', 'event_part_id', 'tornado_extras'],
   types: { event_match_id: 'int', event_part_id: 'int', tornado_extras: 'text', 'extras counter': 'int' },
   aliases: {
-    event_match_id: ['event_match_id', 'match_id', 'eventmatchid'],
-    event_part_id: ['event_part_id', 'part_id', 'eventpartid'],
+    event_match_id: ['event_match_id', 'match_id', 'eventmatchid', 'ex_match_id', 'ex_matchid'],
+    event_part_id: ['event_part_id', 'part_id', 'eventpartid', 'ex_part_id', 'ex_partid'],
     tornado_extras: ['tornado_extras', 'tornado_event', 'tornado_events', 'extras', 'event'],
     'extras counter': ['extras counter', 'extras_counter', 'events_count', 'events count', 'event_count', 'count'],
   },
