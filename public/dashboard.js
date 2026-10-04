@@ -380,6 +380,7 @@ window.switchView = function(id) {
   if (id === 'cmptable') setTimeout(renderCmpTablePage, 50);
   if (id === 'cmpcomp') setTimeout(renderCmpCompPage, 50);
   if (id === 'collectors') setTimeout(renderCollectorsTab, 50);
+  if (id === 'upload') setTimeout(renderUploadTab, 50);
 };
 
 var viewState = {
@@ -1595,3 +1596,97 @@ if (typeof window !== 'undefined') {
     }
   }, 50);
 }
+
+// ── Upload Tab ───────────────────────────────────────────────────────────────
+var UPLOAD_TABLES = [
+  { id: 'Base | Before',    label: 'Base | Before',    columns: ['event_match_id','event_part_id','tornado_event','events_count'],                                         conflict: ['event_match_id','event_part_id','tornado_event'] },
+  { id: 'Base | Current',   label: 'Base | Current',   columns: ['event_match_id','event_part_id','tornado_event','events_count'],                                         conflict: ['event_match_id','event_part_id','tornado_event'] },
+  { id: 'Extra | Before',   label: 'Extra | Before',   columns: ['event_match_id','event_part_id','tornado_event','events_count'],                                         conflict: ['event_match_id','event_part_id','tornado_event'] },
+  { id: 'Extra | Current',  label: 'Extra | Current',  columns: ['event_match_id','event_part_id','tornado_event','events_count'],                                         conflict: ['event_match_id','event_part_id','tornado_event'] },
+  { id: 'matches',          label: 'Matches',          columns: ['match_id','match_name','competition','collection_completion'],                                            conflict: ['match_id'] },
+  { id: 'reviewed_matches', label: 'Reviewed Matches', columns: ['match_id','part_id','code','reviewer_name','team','review_date','data_updated'],                         conflict: ['match_id','part_id'] },
+  { id: 'Half Collector',   label: 'Half Collector',   columns: ['matchid','partid','hr_code','full_name'],                                                                 conflict: ['matchid','partid','hr_code'] },
+];
+
+window.renderUploadTab = function() {
+  var panel = document.getElementById('panel-upload');
+  if (!panel) return;
+  if (panel.getAttribute('data-built') === '1') return; // Only build once
+  panel.setAttribute('data-built', '1');
+
+  var options = UPLOAD_TABLES.map(function(t) {
+    return '<option value="' + t.id + '">' + t.label + '</option>';
+  }).join('');
+
+  panel.innerHTML =
+    '<div style="max-width:720px;margin:30px auto;padding:0 20px;font-family:Arial,sans-serif;">' +
+      '<h2 style="margin:0 0 8px;color:#202124;">CSV Uploader</h2>' +
+      '<p style="color:#5f6368;margin:0 0 20px;">Pick a table, upload a CSV. Duplicates (based on key columns) are skipped automatically.</p>' +
+      '<label style="display:block;font-weight:bold;margin-bottom:6px;">Target table</label>' +
+      '<select id="uploadTableSelect" onchange="updateUploadInfo()" style="width:100%;padding:10px;font-size:14px;border-radius:6px;border:1px solid #ccc;">' + options + '</select>' +
+      '<div id="uploadInfo" style="margin-top:16px;padding:12px;background:#f6f8fa;border-radius:6px;font-size:13px;"></div>' +
+      '<label style="display:block;font-weight:bold;margin-top:24px;margin-bottom:6px;">CSV file</label>' +
+      '<input type="file" id="uploadFileInput" accept=".csv,text/csv" style="display:block;" />' +
+      '<button id="uploadBtn" onclick="doUpload()" style="margin-top:24px;padding:12px 24px;background:#1a73e8;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:bold;cursor:pointer;">Upload CSV</button>' +
+      '<div id="uploadStatus" style="margin-top:20px;"></div>' +
+    '</div>';
+
+  updateUploadInfo();
+};
+
+window.updateUploadInfo = function() {
+  var sel = document.getElementById('uploadTableSelect');
+  var info = document.getElementById('uploadInfo');
+  if (!sel || !info) return;
+  var t = UPLOAD_TABLES.find(function(x) { return x.id === sel.value; });
+  if (!t) return;
+  info.innerHTML =
+    '<div><strong>Required CSV columns (any order):</strong></div>' +
+    '<div style="font-family:monospace;margin-top:4px;">' + t.columns.join(', ') + '</div>' +
+    '<div style="margin-top:8px;"><strong>Dedupe key:</strong></div>' +
+    '<div style="font-family:monospace;margin-top:4px;">' + t.conflict.join(' + ') + '</div>';
+};
+
+window.doUpload = function() {
+  var sel = document.getElementById('uploadTableSelect');
+  var inp = document.getElementById('uploadFileInput');
+  var btn = document.getElementById('uploadBtn');
+  var statusEl = document.getElementById('uploadStatus');
+  var file = inp.files && inp.files[0];
+  if (!file) {
+    statusEl.innerHTML = '<div style="padding:12px;background:#fff3cd;border-radius:6px;">⚠️ Please choose a CSV file first.</div>';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Uploading…';
+  statusEl.innerHTML = '<div style="padding:12px;background:#eef;border-radius:6px;">Uploading…</div>';
+
+  var fd = new FormData();
+  fd.append('file', file);
+  fd.append('table', sel.value);
+
+  fetch('/api/upload-csv', { method: 'POST', body: fd })
+    .then(function(r) { return r.json().then(function(j){ return { ok: r.ok, data: j }; }); })
+    .then(function(res) {
+      btn.disabled = false;
+      btn.textContent = 'Upload CSV';
+      if (!res.ok || res.data.error) {
+        statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ Error: ' + (res.data.error || 'Upload failed') + '</div>';
+        return;
+      }
+      var d = res.data;
+      var html = '<div style="padding:12px;background:#efffef;border-radius:6px;font-size:14px;">' +
+        '<div>✅ <strong>Done.</strong></div>' +
+        '<div>📥 Rows parsed: <strong>' + d.parsed + '</strong></div>' +
+        '<div>✅ Rows upserted: <strong>' + d.upserted + '</strong></div>';
+      if (d.skipped > 0) html += '<div>⏭️ Rows skipped (duplicates in CSV): <strong>' + d.skipped + '</strong></div>';
+      if (d.errors > 0)  html += '<div>❌ Rows failed: <strong>' + d.errors + '</strong></div>';
+      html += '</div>';
+      statusEl.innerHTML = html;
+    })
+    .catch(function(e) {
+      btn.disabled = false;
+      btn.textContent = 'Upload CSV';
+      statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ Error: ' + e.message + '</div>';
+    });
+};
