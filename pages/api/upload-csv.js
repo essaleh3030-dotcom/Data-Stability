@@ -68,10 +68,10 @@ const TABLES = {
     conflictCols: ['matchid', 'partid', 'hr_code'],
     types: { matchid: 'int', partid: 'int', hr_code: 'text', full_name: 'text' },
     aliases: {
-      matchid: ['matchid', 'match_id'],
-      partid: ['partid', 'part_id'],
+      matchid: ['matchid', 'match_id', 'event_match_id', 'eventmatchid'],
+      partid: ['partid', 'part_id', 'event_part_id', 'eventpartid'],
       hr_code: ['hr_code', 'hrcode', 'hr code', 'code'],
-      full_name: ['full_name', 'full name', 'name'],
+      full_name: ['full_name', 'full name', 'name', 'collector_name', 'collector name'],
     },
   },
 };
@@ -157,10 +157,16 @@ export default async function handler(req, res) {
       return o;
     });
 
-    // De-dupe within this batch
+    // Drop rows where any key column is null/empty, then de-dupe within this batch
     const seen = new Set();
     const deduped = [];
+    let droppedNull = 0;
     for (const r of cleaned) {
+      let hasNullKey = false;
+      for (const c of schema.conflictCols) {
+        if (r[c] === null || r[c] === undefined || r[c] === '') { hasNullKey = true; break; }
+      }
+      if (hasNullKey) { droppedNull++; continue; }
       const key = schema.conflictCols.map((c) => String(r[c])).join('||');
       if (seen.has(key)) continue;
       seen.add(key);
