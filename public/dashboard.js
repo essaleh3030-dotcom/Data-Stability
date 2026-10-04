@@ -1611,10 +1611,10 @@ if (typeof window !== 'undefined') {
 
 // ── Upload Tab ───────────────────────────────────────────────────────────────
 var UPLOAD_TABLES = [
-  { id: 'Base | Before',    label: 'Base | Before',    columns: ['event_match_id','event_part_id','tornado_event','events_count'],                                         conflict: ['event_match_id','event_part_id','tornado_event'] },
-  { id: 'Base | Current',   label: 'Base | Current',   columns: ['event_match_id','event_part_id','tornado_event','events_count'],                                         conflict: ['event_match_id','event_part_id','tornado_event'] },
-  { id: 'Extra | Before',   label: 'Extra | Before',   columns: ['event_match_id','event_part_id','tornado_event','events_count'],                                         conflict: ['event_match_id','event_part_id','tornado_event'] },
-  { id: 'Extra | Current',  label: 'Extra | Current',  columns: ['event_match_id','event_part_id','tornado_event','events_count'],                                         conflict: ['event_match_id','event_part_id','tornado_event'] },
+  { id: 'Base | Before',    label: 'Base | Before',    columns: ['event_match_id','event_part_id','tornado_events','events_count'],                                        conflict: ['event_match_id','event_part_id','tornado_events'] },
+  { id: 'Base | Current',   label: 'Base | Current',   columns: ['event_match_id','event_part_id','tornado_events','events_count'],                                        conflict: ['event_match_id','event_part_id','tornado_events'] },
+  { id: 'Extra | Before',   label: 'Extra | Before',   columns: ['event_match_id','event_part_id','tornado_extras','extras counter'],                                      conflict: ['event_match_id','event_part_id','tornado_extras'] },
+  { id: 'Extra | Current',  label: 'Extra | Current',  columns: ['event_match_id','event_part_id','tornado_extras','extras counter'],                                      conflict: ['event_match_id','event_part_id','tornado_extras'] },
   { id: 'matches',          label: 'Matches',          columns: ['match_id','match_name','competition','collection_completion'],                                            conflict: ['match_id'] },
   { id: 'reviewed_matches', label: 'Reviewed Matches', columns: ['match_id','part_id','code','reviewer_name','team','review_date','data_updated'],                         conflict: ['match_id','part_id'] },
   { id: 'Half Collector',   label: 'Half Collector',   columns: ['matchid','partid','hr_code','full_name'],                                                                 conflict: ['matchid','partid','hr_code'] },

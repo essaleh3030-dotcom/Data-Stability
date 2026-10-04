@@ -1,5 +1,5 @@
-// pages/api/comparison.js — replaces getComparisonData() from Code.gs
-import { getSheetValues, findDashboardSheet } from '../../lib/sheets';
+// pages/api/comparison.js — Reads from Supabase (dashboard_before + dashboard_current + reviewed_matches)
+import { createClient } from '@supabase/supabase-js';
 
 const EVENT_COLS = [
   'dribble', 'fifty-fifty', 'hold-up-duel', 'leg-stretch-duel',
@@ -9,16 +9,12 @@ const EVENT_COLS = [
 
 let _cache = null;
 let _cacheTime = 0;
-const CACHE_TTL = 120_000; // 2 minutes (heavier query)
-
-function norm(s) {
-  return String(s || '').trim().toLowerCase().replace(/[\s\-_]+/g, '_');
-}
+const CACHE_TTL = 120_000;
 
 function parseDate(dv) {
-  if (typeof dv === 'number') return new Date(Math.round((dv - 25569) * 86400 * 1000));
-  const d = new Date(String(dv));
-  return (!d || isNaN(d.getTime())) ? null : d;
+  if (!dv) return null;
+  const d = new Date(dv);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 function weekKey(date) {
@@ -30,6 +26,21 @@ function weekKey(date) {
   return `${y}-${m}-${dd}`;
 }
 
+async function fetchAll(supabase, table) {
+  const all = [];
+  const PAGE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase.from(table).select('*').range(from, from + PAGE - 1);
+    if (error) throw new Error(`${table}: ${error.message}`);
+    if (!data || !data.length) break;
+    all.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -37,46 +48,29 @@ export default async function handler(req, res) {
     return res.status(200).json(_cache);
   }
 
-  try {
-    const BEFORE_ID = process.env.BEFORE_SHEET_ID;
-    const AFTER_ID = process.env.AFTER_SHEET_ID;
-    if (!BEFORE_ID || !AFTER_ID) {
-      return res.status(500).json({ error: 'BEFORE_SHEET_ID / AFTER_SHEET_ID not configured' });
-    }
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    return res.status(500).json({ error: 'SUPABASE_URL / SUPABASE_SERVICE_KEY not configured' });
+  }
 
-    // 1. Fetch ALL sheets in parallel (5 calls → 1 round trip)
-    const [revVals, bDashName, aDashName] = await Promise.all([
-      getSheetValues(BEFORE_ID, 'Reviewed Matches').catch((e) => { throw new Error('Cannot read Reviewed Matches: ' + e.message); }),
-      findDashboardSheet(BEFORE_ID),
-      findDashboardSheet(AFTER_ID),
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+
+    const [revRows, bRows, aRows] = await Promise.all([
+      fetchAll(supabase, 'reviewed_matches'),
+      fetchAll(supabase, 'dashboard_before'),
+      fetchAll(supabase, 'dashboard_current'),
     ]);
 
-    // Find header row
-    let revHeaders = revVals[0]?.map(norm) || [];
-    let revHeaderRow = 0;
-    for (let r = 0; r < Math.min(revVals.length, 5); r++) {
-      const h = revVals[r].map(norm);
-      if (h.includes('match_name') || h.includes('data_updated?')) {
-        revHeaders = h;
-        revHeaderRow = r;
-        break;
-      }
-    }
-
-    let revUpdIdx = revHeaders.indexOf('data_updated?');
-    if (revUpdIdx < 0) {
-      for (let i = 0; i < revHeaders.length; i++) {
-        if (revHeaders[i].includes('data_updated')) { revUpdIdx = i; break; }
-      }
-    }
-
+    // Only reviewed where data_updated = Yes
     const reviewedKeys = {};
-    for (let i = revHeaderRow + 1; i < revVals.length; i++) {
-      const mid = String(revVals[i][0] || '').trim();
-      const pid = String(revVals[i][1] || '').trim();
-      const upd = revUpdIdx >= 0 ? String(revVals[i][revUpdIdx] || '').trim().toLowerCase() : '';
-      if (mid && (upd === 'yes' || upd === 'true' || upd === '1')) {
-        reviewedKeys[`${mid}_${pid}`] = true;
+    for (const r of revRows) {
+      const upd = String(r.data_updated || '').trim().toLowerCase();
+      if (upd === 'yes' || upd === 'true' || upd === '1') {
+        reviewedKeys[`${r.match_id}_${r.part_id}`] = true;
       }
     }
 
@@ -85,87 +79,38 @@ export default async function handler(req, res) {
       return res.status(200).json({ error: 'No reviewed matches found (Data Updated = Yes).' });
     }
 
-    // 2. Read Before + After Dashboard in parallel
-    if (!bDashName) return res.status(500).json({ error: 'Dashboard not found in Before spreadsheet.' });
-    if (!aDashName) return res.status(500).json({ error: 'Dashboard not found in After spreadsheet.' });
-
-    const [bVals, aVals] = await Promise.all([
-      getSheetValues(BEFORE_ID, bDashName),
-      getSheetValues(AFTER_ID, aDashName),
-    ]);
-
-    const bHeaders = bVals[0].map(norm);
-
-    const bMidIdx = bHeaders.indexOf('match_id');
-    const bPidIdx = bHeaders.indexOf('part_id');
-    const bDateIdx = bHeaders.indexOf('collection_completion');
-    const bTotalIdx = bHeaders.indexOf('total_duels');
-    const bCompIdx = bHeaders.indexOf('competition');
-    const bEventIdxs = {};
-    EVENT_COLS.forEach((e) => { bEventIdxs[e] = bHeaders.indexOf(norm(e)); });
-    const aHeaders = aVals[0].map(norm);
-
-    let aMidIdx2 = -1, aPidIdx2 = -1, aDateIdx2 = -1, aTotalIdx2 = -1;
-    const aEventIdxs2 = {};
-    let afterStart = -1;
-    for (let i = bTotalIdx + 1; i < aHeaders.length; i++) {
-      if (aHeaders[i] === 'match_id') { afterStart = i; aMidIdx2 = i; break; }
-    }
-    if (afterStart >= 0) {
-      for (let i = afterStart; i < aHeaders.length; i++) {
-        if (aHeaders[i] === 'part_id' && aPidIdx2 < 0) aPidIdx2 = i;
-        if (aHeaders[i] === 'collection_completion' && aDateIdx2 < 0) aDateIdx2 = i;
-        if (aHeaders[i] === 'total_duels' && aTotalIdx2 < 0) aTotalIdx2 = i;
-        EVENT_COLS.forEach((e) => {
-          if (aHeaders[i] === norm(e) && !aEventIdxs2[e]) aEventIdxs2[e] = i;
-        });
-      }
-    }
-
-    // 4. Before data lookup
+    // Build before/after lookups keyed by match_id_part_id, restricted to reviewed
     const beforeData = {};
-    for (let i = 1; i < bVals.length; i++) {
-      const mid = String(bVals[i][bMidIdx] || '').trim();
-      const pid = String(bVals[i][bPidIdx] || '').trim();
-      const key = `${mid}_${pid}`;
+    for (const r of bRows) {
+      const key = `${r.match_id}_${r.part_id}`;
       if (!reviewedKeys[key]) continue;
-
-      const date = parseDate(bVals[i][bDateIdx]);
+      const date = parseDate(r.collection_completion);
       if (!date) continue;
-
       const evts = {};
-      EVENT_COLS.forEach((e) => { evts[e] = Number(bVals[i][bEventIdxs[e]]) || 0; });
-
+      EVENT_COLS.forEach((e) => { evts[e] = Number(r[e]) || 0; });
       beforeData[key] = {
         date,
-        total: Number(bVals[i][bTotalIdx]) || 0,
+        total: Number(r.total_duels) || 0,
         events: evts,
-        competition: bCompIdx >= 0 ? String(bVals[i][bCompIdx] || '').trim() : '',
+        competition: String(r.competition || '').trim(),
       };
     }
 
-    // 5. After data lookup
     const afterData = {};
-    if (aMidIdx2 >= 0) {
-      for (let i = 1; i < aVals.length; i++) {
-        const mid = String(aVals[i][aMidIdx2] || '').trim();
-        const pid = String(aVals[i][aPidIdx2] || '').trim();
-        const key = `${mid}_${pid}`;
-        if (!reviewedKeys[key]) continue;
-
-        const date = parseDate(aVals[i][aDateIdx2 >= 0 ? aDateIdx2 : bDateIdx]);
-        const evts = {};
-        EVENT_COLS.forEach((e) => { evts[e] = Number(aVals[i][aEventIdxs2[e]]) || 0; });
-
-        afterData[key] = {
-          date,
-          total: aTotalIdx2 >= 0 ? (Number(aVals[i][aTotalIdx2]) || 0) : 0,
-          events: evts,
-        };
-      }
+    for (const r of aRows) {
+      const key = `${r.match_id}_${r.part_id}`;
+      if (!reviewedKeys[key]) continue;
+      const date = parseDate(r.collection_completion);
+      const evts = {};
+      EVENT_COLS.forEach((e) => { evts[e] = Number(r[e]) || 0; });
+      afterData[key] = {
+        date,
+        total: Number(r.total_duels) || 0,
+        events: evts,
+      };
     }
 
-    // 6. Group by week (Sunday-start), track per-part counts
+    // Build weekly + part detail
     const weekMap = {};
     const partDetails = [];
 
@@ -207,7 +152,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // 7. Weekly arrays (averages per PART)
     const weeks = Object.keys(weekMap).sort();
     const labels = [], matchCounts = [], partCounts = [];
     const beforeAvgTotal = [], afterAvgTotal = [];
@@ -229,7 +173,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // 8. Competition summary
+    // Competition summary
     const compMap = {};
     for (const p of partDetails) {
       const c = p.competition || 'Unknown';
@@ -286,10 +230,9 @@ export default async function handler(req, res) {
 
     _cache = result;
     _cacheTime = Date.now();
-
     res.status(200).json(result);
   } catch (err) {
-    console.error('getComparisonData error:', err);
+    console.error('comparison API error:', err);
     res.status(500).json({ error: err.message });
   }
 }

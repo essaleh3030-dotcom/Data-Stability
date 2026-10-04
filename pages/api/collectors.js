@@ -1,12 +1,32 @@
-// pages/api/collectors.js — collector parts overview + reviewed duels added
-import { getSheetValues, findDashboardSheet } from '../../lib/sheets';
+// pages/api/collectors.js — Reads from Supabase (Half Collector + dashboard_before + reviewed_matches + dashboard_current)
+import { createClient } from '@supabase/supabase-js';
 
 let _cache = null;
 let _cacheTime = 0;
-const CACHE_TTL = 120_000; // 2 minutes
+const CACHE_TTL = 120_000;
 
-function norm(s) {
-  return String(s || '').trim().toLowerCase().replace(/[\s\-_]+/g, '_');
+function weekStart(dateVal) {
+  if (!dateVal) return null;
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return null;
+  const day = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+
+async function fetchAll(supabase, table) {
+  const all = [];
+  const PAGE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase.from(table).select('*').range(from, from + PAGE - 1);
+    if (error) throw new Error(`${table}: ${error.message}`);
+    if (!data || !data.length) break;
+    all.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
 }
 
 export default async function handler(req, res) {
@@ -16,193 +36,83 @@ export default async function handler(req, res) {
     return res.status(200).json(_cache);
   }
 
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    return res.status(500).json({ error: 'SUPABASE_URL / SUPABASE_SERVICE_KEY not configured' });
+  }
+
   try {
-    const BEFORE_ID = process.env.BEFORE_SHEET_ID;
-    const AFTER_ID = process.env.AFTER_SHEET_ID;
-    const ASSIGN_ID = process.env.ASSIGNMENTS_SHEET_ID;
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
 
-    if (!BEFORE_ID || !AFTER_ID || !ASSIGN_ID) {
-      return res.status(500).json({ error: 'Missing env vars: BEFORE_SHEET_ID, AFTER_SHEET_ID, or ASSIGNMENTS_SHEET_ID' });
-    }
-
-    // Sunday-based week start helper
-    // Google Sheets dates can be serial numbers (days since 1899-12-30) or date strings
-    function weekStart(dateStr) {
-      let d;
-      const raw = String(dateStr || '').trim();
-      if (!raw) return null;
-      if (/^\d+(\.\d+)?$/.test(raw)) {
-        // Google Sheets serial date number
-        const serial = parseFloat(raw);
-        if (serial < 1) return null;
-        d = new Date(Date.UTC(1899, 11, 30 + Math.floor(serial)));
-      } else {
-        d = new Date(raw);
-      }
-      if (isNaN(d.getTime())) return null;
-      const day = d.getUTCDay(); // 0=Sun
-      d.setUTCDate(d.getUTCDate() - day);
-      return d.toISOString().slice(0, 10);
-    }
-
-    // 1. Fetch ALL sheets in parallel
-    const [assignVals, bDashName, revVals] = await Promise.all([
-      getSheetValues(ASSIGN_ID, ''),
-      findDashboardSheet(BEFORE_ID),
-      getSheetValues(BEFORE_ID, 'Reviewed Matches').catch(() => []),
+    const [collRows, bRows, revRows, aRows] = await Promise.all([
+      fetchAll(supabase, 'Half Collector'),
+      fetchAll(supabase, 'dashboard_before'),
+      fetchAll(supabase, 'reviewed_matches'),
+      fetchAll(supabase, 'dashboard_current'),
     ]);
 
-    if (!assignVals.length) return res.status(404).json({ error: 'Assignments sheet is empty' });
-    if (!bDashName) return res.status(500).json({ error: 'Dashboard not found in Before spreadsheet' });
-
-    const aHeaders = assignVals[0].map(norm);
-    const aMatchIdx = aHeaders.indexOf('matchid');
-    const aPartIdx = aHeaders.indexOf('partid');
-    const aNameIdx = aHeaders.indexOf('full_name');
-    const aHrIdx = aHeaders.indexOf('hr_code');
-    const aDateIdx = aHeaders.indexOf('tornado_first_completion');
-    const aDateFallbackIdx = aHeaders.indexOf('assignment_date');
-
-    if (aMatchIdx < 0 || aPartIdx < 0 || aNameIdx < 0 || aHrIdx < 0) {
-      return res.status(400).json({
-        error: `Assignments sheet missing required columns. Found: ${aHeaders.join(', ')}`,
-      });
-    }
-
-    // Build assignments lookup: key = matchId_partId -> { hr_code, full_name, week }
-    const assignments = {};
-    for (let i = 1; i < assignVals.length; i++) {
-      const row = assignVals[i];
-      const mid = String(row[aMatchIdx] || '').trim();
-      const pid = String(row[aPartIdx] || '').trim();
-      const hrCode = String(row[aHrIdx] || '').trim();
-      const fullName = String(row[aNameIdx] || '').trim();
-      let dateVal = aDateIdx >= 0 ? String(row[aDateIdx] || '').trim() : '';
-      if (!dateVal && aDateFallbackIdx >= 0) dateVal = String(row[aDateFallbackIdx] || '').trim();
-      if (!mid || !pid || !hrCode) continue;
-      let displayDate = '';
-      if (dateVal) {
-        if (/^\d+(\.\d+)?$/.test(dateVal)) {
-          const sd = new Date(Date.UTC(1899, 11, 30 + Math.floor(parseFloat(dateVal))));
-          if (!isNaN(sd.getTime())) displayDate = sd.toISOString().slice(0, 10);
-        } else {
-          const pd = new Date(dateVal);
-          if (!isNaN(pd.getTime())) displayDate = pd.toISOString().slice(0, 10);
-        }
-      }
-      assignments[`${mid}_${pid}`] = { hr_code: hrCode, full_name: fullName, week: weekStart(dateVal), date: displayDate };
-    }
-
-    // 2. Read Before Dashboard (bDashName already resolved above)
-    const bVals = await getSheetValues(BEFORE_ID, bDashName);
-    const bHeaders = bVals[0].map(norm);
-
-    const bMidIdx = bHeaders.indexOf('match_id');
-    const bPidIdx = bHeaders.indexOf('part_id');
-    const bTotalIdx = bHeaders.indexOf('total_duels');
-    const bCompIdx = bHeaders.indexOf('competition');
-
+    // Join collectors with before data
     const beforeData = {};
-    for (let i = 1; i < bVals.length; i++) {
-      const mid = String(bVals[i][bMidIdx] || '').trim();
-      const pid = String(bVals[i][bPidIdx] || '').trim();
-      if (!mid || !pid) continue;
-      beforeData[`${mid}_${pid}`] = {
-        total: bTotalIdx >= 0 ? (Number(bVals[i][bTotalIdx]) || 0) : 0,
-        competition: bCompIdx >= 0 ? String(bVals[i][bCompIdx] || '').trim() : '',
+    for (const r of bRows) {
+      const key = `${r.match_id}_${r.part_id}`;
+      beforeData[key] = {
+        total: Number(r.total_duels) || 0,
+        competition: String(r.competition || '').trim(),
+        date: r.collection_completion ? new Date(r.collection_completion).toISOString().slice(0, 10) : null,
       };
     }
 
+    const assignments = {};
+    for (const r of collRows) {
+      const key = `${r.matchid}_${r.partid}`;
+      const bd = beforeData[key];
+      assignments[key] = {
+        hr_code: String(r.hr_code || '').trim(),
+        full_name: String(r.full_name || '').trim(),
+        week: bd && bd.date ? weekStart(bd.date) : null,
+        date: bd ? bd.date : null,
+      };
+    }
+
+    // Reviewed keys (data_updated = Yes)
     const reviewedKeys = {};
-    if (revVals.length) {
-      let revHeaders = revVals[0].map(norm);
-      let revHeaderRow = 0;
-      for (let r = 0; r < Math.min(revVals.length, 5); r++) {
-        const h = revVals[r].map(norm);
-        if (h.includes('match_name') || h.includes('data_updated?')) {
-          revHeaders = h;
-          revHeaderRow = r;
-          break;
-        }
-      }
-      let revUpdIdx = revHeaders.indexOf('data_updated?');
-      if (revUpdIdx < 0) {
-        for (let i = 0; i < revHeaders.length; i++) {
-          if (revHeaders[i].includes('data_updated')) { revUpdIdx = i; break; }
-        }
-      }
-      for (let i = revHeaderRow + 1; i < revVals.length; i++) {
-        const mid = String(revVals[i][0] || '').trim();
-        const pid = String(revVals[i][1] || '').trim();
-        const upd = revUpdIdx >= 0 ? String(revVals[i][revUpdIdx] || '').trim().toLowerCase() : '';
-        if (mid && (upd === 'yes' || upd === 'true' || upd === '1')) {
-          reviewedKeys[`${mid}_${pid}`] = true;
-        }
+    for (const r of revRows) {
+      const upd = String(r.data_updated || '').trim().toLowerCase();
+      if (upd === 'yes' || upd === 'true' || upd === '1') {
+        reviewedKeys[`${r.match_id}_${r.part_id}`] = true;
       }
     }
 
-    // 4. Read After/Current Dashboard for reviewed parts (parallel fetch)
-    let afterData = {};
-    if (Object.keys(reviewedKeys).length > 0) {
-      const [aDashName] = await Promise.all([findDashboardSheet(AFTER_ID)]);
-      if (aDashName) {
-        const aVals = await getSheetValues(AFTER_ID, aDashName);
-        const aHdrs = aVals[0].map(norm);
-
-        // Find the second column set (after columns R onward)
-        let aMidIdx2 = -1, aPidIdx2 = -1, aTotalIdx2 = -1;
-        const firstTotalIdx = aHdrs.indexOf('total_duels');
-        for (let i = (firstTotalIdx >= 0 ? firstTotalIdx + 1 : 0); i < aHdrs.length; i++) {
-          if (aHdrs[i] === 'match_id' && aMidIdx2 < 0) aMidIdx2 = i;
-        }
-        if (aMidIdx2 >= 0) {
-          for (let i = aMidIdx2; i < aHdrs.length; i++) {
-            if (aHdrs[i] === 'part_id' && aPidIdx2 < 0) aPidIdx2 = i;
-            if (aHdrs[i] === 'total_duels' && aTotalIdx2 < 0) aTotalIdx2 = i;
-          }
-        }
-
-        if (aMidIdx2 >= 0) {
-          for (let i = 1; i < aVals.length; i++) {
-            const mid = String(aVals[i][aMidIdx2] || '').trim();
-            const pid = String(aVals[i][aPidIdx2] || '').trim();
-            const key = `${mid}_${pid}`;
-            if (!reviewedKeys[key]) continue;
-            afterData[key] = {
-              total: aTotalIdx2 >= 0 ? (Number(aVals[i][aTotalIdx2]) || 0) : 0,
-            };
-          }
-        }
-      }
+    // After data for reviewed parts
+    const afterData = {};
+    for (const r of aRows) {
+      const key = `${r.match_id}_${r.part_id}`;
+      if (!reviewedKeys[key]) continue;
+      afterData[key] = { total: Number(r.total_duels) || 0 };
     }
 
-    // 5. Build View 1: Collector Parts Overview (Before data only)
+    // Build Collector Parts Overview
     const collectorMap = {};
-
     for (const [key, assign] of Object.entries(assignments)) {
       const before = beforeData[key];
       if (!before) continue;
+      if (!assign.hr_code) continue;
 
       if (!collectorMap[assign.hr_code]) {
         collectorMap[assign.hr_code] = {
           hr_code: assign.hr_code,
           full_name: assign.full_name,
           totalParts: 0,
-          under20: 0,
-          from20to30: 0,
-          from30to40: 0,
-          from40to50: 0,
-          from50to60: 0,
-          from60to80: 0,
-          from80to100: 0,
-          over100: 0,
+          under20: 0, from20to30: 0, from30to40: 0, from40to50: 0,
+          from50to60: 0, from60to80: 0, from80to100: 0, over100: 0,
           parts: [],
         };
       }
-
       const c = collectorMap[assign.hr_code];
       c.totalParts++;
-
       const duels = before.total;
       if (duels < 20) c.under20++;
       else if (duels < 30) c.from20to30++;
@@ -221,11 +131,9 @@ export default async function handler(req, res) {
         week: assign.week,
       });
     }
+    const collectorsOverview = Object.values(collectorMap).sort((a, b) => b.totalParts - a.totalParts);
 
-    const collectorsOverview = Object.values(collectorMap)
-      .sort((a, b) => b.totalParts - a.totalParts);
-
-    // 5b. Build weekly overview — brackets grouped by assignment week
+    // Weekly overview
     const weekMap = {};
     for (const [key, assign] of Object.entries(assignments)) {
       const before = beforeData[key];
@@ -246,13 +154,11 @@ export default async function handler(req, res) {
       else if (duels <= 100) wk.from80to100++;
       else wk.over100++;
     }
-    const weeklyOverview = Object.values(weekMap)
-      .sort((a, b) => (a.week < b.week ? -1 : a.week > b.week ? 1 : 0));
+    const weeklyOverview = Object.values(weekMap).sort((a, b) => (a.week < b.week ? -1 : a.week > b.week ? 1 : 0));
 
-    // 6. Build View 2: Reviewed Duels Added (Before vs Current)
+    // Reviewed Duels Added
     const reviewedParts = [];
     const reviewCollectorMap = {};
-
     for (const key of Object.keys(reviewedKeys)) {
       const assign = assignments[key];
       if (!assign) continue;
@@ -272,9 +178,7 @@ export default async function handler(req, res) {
         competition: before.competition,
         week: assign.week,
         date: assign.date,
-        beforeTotal,
-        afterTotal,
-        diff,
+        beforeTotal, afterTotal, diff,
       });
 
       if (!reviewCollectorMap[assign.hr_code]) {
@@ -293,9 +197,7 @@ export default async function handler(req, res) {
     const reviewCollectorSummary = Object.values(reviewCollectorMap)
       .map((c) => ({
         ...c,
-        avgDuelsAdded: c.reviewedParts > 0
-          ? Math.round(c.totalDuelsAdded / c.reviewedParts * 10) / 10
-          : 0,
+        avgDuelsAdded: c.reviewedParts > 0 ? Math.round(c.totalDuelsAdded / c.reviewedParts * 10) / 10 : 0,
       }))
       .sort((a, b) => b.reviewedParts - a.reviewedParts);
 
