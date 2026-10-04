@@ -1640,6 +1640,8 @@ window.renderUploadTab = function() {
       '<label style="display:block;font-weight:bold;margin-top:24px;margin-bottom:6px;">CSV file</label>' +
       '<input type="file" id="uploadFileInput" accept=".csv,text/csv" style="display:block;" />' +
       '<button id="uploadBtn" onclick="doUpload()" style="margin-top:24px;padding:12px 24px;background:#1a73e8;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:bold;cursor:pointer;">Upload CSV</button>' +
+      '<button id="refreshBtn" onclick="doRefreshDashboards()" style="margin-top:24px;margin-left:12px;padding:12px 24px;background:#28a745;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:bold;cursor:pointer;">🔄 Refresh Dashboard Data</button>' +
+      '<div style="margin-top:8px;color:#5f6368;font-size:12px;">After uploading, click "Refresh Dashboard Data" to update the dashboard views.</div>' +
       '<div id="uploadStatus" style="margin-top:20px;"></div>' +
     '</div>';
 
@@ -1657,6 +1659,30 @@ window.updateUploadInfo = function() {
     '<div style="font-family:monospace;margin-top:4px;">' + t.columns.join(', ') + '</div>' +
     '<div style="margin-top:8px;"><strong>Dedupe key:</strong></div>' +
     '<div style="font-family:monospace;margin-top:4px;">' + t.conflict.join(' + ') + '</div>';
+};
+
+window.doRefreshDashboards = function() {
+  var btn = document.getElementById('refreshBtn');
+  var statusEl = document.getElementById('uploadStatus');
+  btn.disabled = true;
+  btn.textContent = 'Refreshing…';
+  statusEl.innerHTML = '<div style="padding:12px;background:#eef;border-radius:6px;">🔄 Refreshing dashboard materialized views… (may take 10-60s)</div>';
+  fetch('/api/refresh-dashboards', { method: 'POST' })
+    .then(function(r) { return r.json().then(function(j){ return { ok: r.ok, data: j }; }); })
+    .then(function(res) {
+      btn.disabled = false;
+      btn.textContent = '🔄 Refresh Dashboard Data';
+      if (!res.ok || res.data.error) {
+        statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ ' + (res.data.error || 'Refresh failed') + '</div>';
+        return;
+      }
+      statusEl.innerHTML = '<div style="padding:12px;background:#efffef;border-radius:6px;">✅ Dashboards refreshed in ' + res.data.ms + 'ms. Reload the page to see new data.</div>';
+    })
+    .catch(function(e) {
+      btn.disabled = false;
+      btn.textContent = '🔄 Refresh Dashboard Data';
+      statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ ' + e.message + '</div>';
+    });
 };
 
 // Load PapaParse from CDN once
