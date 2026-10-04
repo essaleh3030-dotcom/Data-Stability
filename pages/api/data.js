@@ -84,6 +84,8 @@ export default async function handler(req, res) {
         source: 'supabase:dashboard_current',
         rowCount: rows.length,
         rawCount: all.length,
+        missingEventCols: [],
+        hasTotalCol: true,
       },
     };
 
