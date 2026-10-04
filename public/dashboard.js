@@ -1647,6 +1647,16 @@ window.updateUploadInfo = function() {
     '<div style="font-family:monospace;margin-top:4px;">' + t.conflict.join(' + ') + '</div>';
 };
 
+// Load PapaParse from CDN once
+function ensurePapaLoaded(cb) {
+  if (window.Papa) return cb();
+  var s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js';
+  s.onload = cb;
+  s.onerror = function() { cb(new Error('Failed to load CSV parser')); };
+  document.head.appendChild(s);
+}
+
 window.doUpload = function() {
   var sel = document.getElementById('uploadTableSelect');
   var inp = document.getElementById('uploadFileInput');
@@ -1657,36 +1667,98 @@ window.doUpload = function() {
     statusEl.innerHTML = '<div style="padding:12px;background:#fff3cd;border-radius:6px;">⚠️ Please choose a CSV file first.</div>';
     return;
   }
+
   btn.disabled = true;
-  btn.textContent = 'Uploading…';
-  statusEl.innerHTML = '<div style="padding:12px;background:#eef;border-radius:6px;">Uploading…</div>';
+  btn.textContent = 'Parsing…';
+  statusEl.innerHTML = '<div style="padding:12px;background:#eef;border-radius:6px;">Parsing CSV in browser…</div>';
 
-  var fd = new FormData();
-  fd.append('file', file);
-  fd.append('table', sel.value);
-
-  fetch('/api/upload-csv', { method: 'POST', body: fd })
-    .then(function(r) { return r.json().then(function(j){ return { ok: r.ok, data: j }; }); })
-    .then(function(res) {
+  ensurePapaLoaded(function(err) {
+    if (err) {
       btn.disabled = false;
       btn.textContent = 'Upload CSV';
-      if (!res.ok || res.data.error) {
-        statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ Error: ' + (res.data.error || 'Upload failed') + '</div>';
-        return;
-      }
-      var d = res.data;
-      var html = '<div style="padding:12px;background:#efffef;border-radius:6px;font-size:14px;">' +
-        '<div>✅ <strong>Done.</strong></div>' +
-        '<div>📥 Rows parsed: <strong>' + d.parsed + '</strong></div>' +
-        '<div>✅ Rows upserted: <strong>' + d.upserted + '</strong></div>';
-      if (d.skipped > 0) html += '<div>⏭️ Rows skipped (duplicates in CSV): <strong>' + d.skipped + '</strong></div>';
-      if (d.errors > 0)  html += '<div>❌ Rows failed: <strong>' + d.errors + '</strong></div>';
-      html += '</div>';
-      statusEl.innerHTML = html;
-    })
-    .catch(function(e) {
-      btn.disabled = false;
-      btn.textContent = 'Upload CSV';
-      statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ Error: ' + e.message + '</div>';
+      statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ ' + err.message + '</div>';
+      return;
+    }
+
+    window.Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: function(h) { return h.trim(); },
+      complete: function(results) {
+        var rows = results.data;
+        if (!rows.length) {
+          btn.disabled = false;
+          btn.textContent = 'Upload CSV';
+          statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ CSV has no data rows</div>';
+          return;
+        }
+        uploadBatches(sel.value, rows, btn, statusEl);
+      },
+      error: function(e) {
+        btn.disabled = false;
+        btn.textContent = 'Upload CSV';
+        statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ Parse error: ' + e.message + '</div>';
+      },
     });
+  });
 };
+
+function uploadBatches(tableName, rows, btn, statusEl) {
+  var BATCH = 500;
+  var totalBatches = Math.ceil(rows.length / BATCH);
+  var totalUpserted = 0;
+  var totalSkipped = 0;
+  var totalReceived = 0;
+  var batchIdx = 0;
+
+  function next() {
+    if (batchIdx >= totalBatches) {
+      btn.disabled = false;
+      btn.textContent = 'Upload CSV';
+      statusEl.innerHTML =
+        '<div style="padding:12px;background:#efffef;border-radius:6px;font-size:14px;">' +
+          '<div>✅ <strong>Done.</strong></div>' +
+          '<div>📥 Rows parsed: <strong>' + rows.length + '</strong></div>' +
+          '<div>📤 Rows sent: <strong>' + totalReceived + '</strong></div>' +
+          '<div>✅ Rows upserted: <strong>' + totalUpserted + '</strong></div>' +
+          (totalSkipped > 0 ? '<div>⏭️ Duplicates skipped: <strong>' + totalSkipped + '</strong></div>' : '') +
+        '</div>';
+      return;
+    }
+    var batch = rows.slice(batchIdx * BATCH, (batchIdx + 1) * BATCH);
+    btn.textContent = 'Uploading batch ' + (batchIdx + 1) + '/' + totalBatches + '…';
+    statusEl.innerHTML =
+      '<div style="padding:12px;background:#eef;border-radius:6px;">' +
+        '⬆️ Uploading batch ' + (batchIdx + 1) + ' of ' + totalBatches + ' (' + batch.length + ' rows)…' +
+        '<div style="margin-top:8px;height:8px;background:#ddd;border-radius:4px;overflow:hidden;">' +
+          '<div style="height:100%;width:' + Math.round((batchIdx / totalBatches) * 100) + '%;background:#1a73e8;"></div>' +
+        '</div>' +
+      '</div>';
+
+    fetch('/api/upload-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: tableName, rows: batch }),
+    })
+      .then(function(r) { return r.json().then(function(j){ return { ok: r.ok, data: j }; }); })
+      .then(function(res) {
+        if (!res.ok || res.data.error) {
+          btn.disabled = false;
+          btn.textContent = 'Upload CSV';
+          statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ Batch ' + (batchIdx + 1) + ' failed: ' + (res.data.error || 'Unknown error') + '</div>';
+          return;
+        }
+        totalReceived += res.data.received || 0;
+        totalUpserted += res.data.upserted || 0;
+        totalSkipped += res.data.skippedInBatch || 0;
+        batchIdx++;
+        next();
+      })
+      .catch(function(e) {
+        btn.disabled = false;
+        btn.textContent = 'Upload CSV';
+        statusEl.innerHTML = '<div style="padding:12px;background:#fdd;border-radius:6px;">❌ Network error on batch ' + (batchIdx + 1) + ': ' + e.message + '</div>';
+      });
+  }
+  next();
+}

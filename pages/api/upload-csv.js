@@ -1,16 +1,14 @@
-// pages/api/upload-csv.js — CSV upload handler
+// pages/api/upload-csv.js — Accepts JSON batch of rows, upserts to Supabase
 import { createClient } from '@supabase/supabase-js';
-import formidable from 'formidable';
-import Papa from 'papaparse';
-import fs from 'fs';
 
 export const config = {
   api: {
-    bodyParser: false, // formidable handles multipart/form-data
+    bodyParser: {
+      sizeLimit: '4mb',
+    },
   },
 };
 
-// Table definitions (must match pages/upload.js)
 const TABLES = {
   'Base | Before': {
     columns: ['event_match_id', 'event_part_id', 'tornado_event', 'events_count'],
@@ -62,21 +60,10 @@ function coerce(value, type) {
     return isNaN(n) ? null : n;
   }
   if (type === 'date' || type === 'timestamp') {
-    // Accept ISO strings or common formats; return null on invalid
     const d = new Date(s);
     return isNaN(d.getTime()) ? null : d.toISOString();
   }
   return s;
-}
-
-function parseForm(req) {
-  return new Promise((resolve, reject) => {
-    const form = formidable({ maxFileSize: 20 * 1024 * 1024 }); // 20 MB
-    form.parse(req, (err, fields, files) => {
-      if (err) return reject(err);
-      resolve({ fields, files });
-    });
-  });
 }
 
 export default async function handler(req, res) {
@@ -89,41 +76,23 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { fields, files } = await parseForm(req);
-    const tableName = Array.isArray(fields.table) ? fields.table[0] : fields.table;
-    const file = Array.isArray(files.file) ? files.file[0] : files.file;
+    const { table: tableName, rows } = req.body || {};
 
     if (!tableName || !TABLES[tableName]) {
       return res.status(400).json({ error: 'Invalid table name: ' + tableName });
     }
-    if (!file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+    if (!Array.isArray(rows) || !rows.length) {
+      return res.status(400).json({ error: 'No rows provided' });
     }
 
     const schema = TABLES[tableName];
-    const csvText = fs.readFileSync(file.filepath, 'utf8');
 
-    const parsed = Papa.parse(csvText, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (h) => h.trim(),
-    });
-
-    if (parsed.errors.length > 0) {
-      console.error('CSV parse errors:', parsed.errors.slice(0, 3));
-    }
-
-    const rows = parsed.data;
-    if (!rows.length) {
-      return res.status(400).json({ error: 'CSV has no data rows' });
-    }
-
-    // Validate headers
-    const headers = parsed.meta.fields || [];
+    // Validate headers from first row
+    const headers = Object.keys(rows[0]);
     const missing = schema.columns.filter((c) => !headers.includes(c));
     if (missing.length > 0) {
       return res.status(400).json({
-        error: `CSV missing required columns: ${missing.join(', ')}. Found headers: ${headers.join(', ')}`,
+        error: `Missing required columns: ${missing.join(', ')}. Found: ${headers.join(', ')}`,
       });
     }
 
@@ -136,7 +105,7 @@ export default async function handler(req, res) {
       return o;
     });
 
-    // De-dupe within the CSV itself (based on conflict keys)
+    // De-dupe within this batch
     const seen = new Set();
     const deduped = [];
     for (const r of cleaned) {
@@ -145,42 +114,30 @@ export default async function handler(req, res) {
       seen.add(key);
       deduped.push(r);
     }
-    const skippedInCsv = cleaned.length - deduped.length;
+    const skippedInBatch = cleaned.length - deduped.length;
 
-    // Upsert in batches of 500 to Supabase
+    // Upsert to Supabase
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    let upserted = 0;
-    let errors = 0;
-    const errorMessages = [];
-    const BATCH = 500;
-    for (let i = 0; i < deduped.length; i += BATCH) {
-      const batch = deduped.slice(i, i + BATCH);
-      const { error, count } = await supabase
-        .from(tableName)
-        .upsert(batch, {
-          onConflict: schema.conflictCols.join(','),
-          ignoreDuplicates: true, // skip if conflict (don't update)
-          count: 'exact',
-        });
-      if (error) {
-        errors += batch.length;
-        if (errorMessages.length < 3) errorMessages.push(error.message);
-      } else {
-        upserted += (count ?? batch.length);
-      }
+    const { error, count } = await supabase
+      .from(tableName)
+      .upsert(deduped, {
+        onConflict: schema.conflictCols.join(','),
+        ignoreDuplicates: true,
+        count: 'exact',
+      });
+
+    if (error) {
+      return res.status(500).json({ error: 'Supabase: ' + error.message, received: rows.length });
     }
 
     res.status(200).json({
-      table: tableName,
-      parsed: rows.length,
-      deduped_in_csv: deduped.length,
-      skipped: skippedInCsv,
-      upserted,
-      errors,
-      errorMessages: errorMessages.length ? errorMessages : undefined,
+      received: rows.length,
+      deduped: deduped.length,
+      skippedInBatch,
+      upserted: count ?? deduped.length,
     });
   } catch (err) {
     console.error('upload-csv error:', err);
